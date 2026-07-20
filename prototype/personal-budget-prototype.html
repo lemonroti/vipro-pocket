@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111827" />
+  <title>Clarity — Personal Budget Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          boxShadow: {
+            soft: '0 14px 45px rgba(15, 23, 42, 0.08)',
+            card: '0 8px 30px rgba(15, 23, 42, 0.06)'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f4f6f2;
+      --card: rgba(255, 255, 255, 0.92);
+      --text: #17211b;
+      --muted: #78827a;
+      --line: #e6e9e4;
+      --primary: #163f32;
+      --primary-soft: #e4f0e9;
+      --lime: #c6f36d;
+      --coral: #ff806e;
+      --lavender: #8d7cf7;
+      --blue: #4f8cff;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 85% 8%, rgba(198, 243, 109, 0.18), transparent 24rem),
+        radial-gradient(circle at 4% 92%, rgba(141, 124, 247, 0.10), transparent 26rem),
+        var(--canvas);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    [v-cloak] { display: none; }
+    button, input, select, textarea { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    .glass {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.75);
+      box-shadow: 0 12px 38px rgba(15, 23, 42, 0.06);
+      backdrop-filter: blur(18px);
+    }
+    .card {
+      background: rgba(255,255,255,.94);
+      border: 1px solid rgba(228,232,227,.95);
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.055);
+      border-radius: 24px;
+    }
+    .sidebar-link { transition: all .22s ease; }
+    .sidebar-link:hover { transform: translateX(2px); background: rgba(255,255,255,.08); }
+    .sidebar-link.active { background: rgba(255,255,255,.13); color: white; }
+    .sidebar-link.active .nav-indicator { opacity: 1; transform: scaleY(1); }
+    .nav-indicator { opacity: 0; transform: scaleY(.2); transition: all .2s ease; }
+    .metric-card { transition: transform .2s ease, box-shadow .2s ease; }
+    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 16px 38px rgba(15,23,42,.08); }
+    .transaction-row { transition: background .15s ease; }
+    .transaction-row:hover { background: #fafbf9; }
+    .progress-track { background: #edf0ec; }
+    .progress-bar { transition: width .6s cubic-bezier(.4,0,.2,1); }
+    .fade-enter-active, .fade-leave-active { transition: opacity .18s ease; }
+    .fade-enter-from, .fade-leave-to { opacity: 0; }
+    .slide-enter-active, .slide-leave-active { transition: all .22s ease; }
+    .slide-enter-from, .slide-leave-to { opacity: 0; transform: translateY(10px); }
+    .modal-panel { animation: modalIn .22s ease-out; }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #d9ddd8; border-radius: 999px; }
+    .focus-ring:focus { outline: 3px solid rgba(79,140,255,.18); border-color: #4f8cff; }
+    .dark-mode {
+      --canvas: #0f1512;
+      --card: rgba(26, 35, 30, 0.94);
+      --text: #f4f7f5;
+      --muted: #9aa69f;
+      --line: #2c3731;
+      background: radial-gradient(circle at 85% 8%, rgba(198, 243, 109, 0.08), transparent 24rem), #0f1512;
+    }
+    .dark-mode .card, .dark-mode .glass { background: rgba(25,34,29,.94); border-color: rgba(54,68,60,.8); }
+    .dark-mode .transaction-row:hover { background: #202a24; }
+    .dark-mode .progress-track { background: #303a34; }
+    .dark-mode input, .dark-mode select, .dark-mode textarea { background: #18201c; border-color: #37423c; color: white; }
+    .dark-mode .bg-white { background-color: #19221d !important; }
+    .dark-mode .text-slate-900, .dark-mode .text-slate-800, .dark-mode .text-slate-700 { color: #f5f7f5 !important; }
+    .dark-mode .text-slate-500, .dark-mode .text-slate-600 { color: #9aa69f !important; }
+    .dark-mode .border-slate-100, .dark-mode .border-slate-200 { border-color: #303b35 !important; }
+    @media (max-width: 767px) {
+      body { background: #f4f6f2; }
+      .dark-mode { background: #0f1512; }
+      .mobile-card-radius { border-radius: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" v-cloak :class="{ 'dark-mode': darkMode }" class="min-h-screen">
+    <div class="min-h-screen md:flex">
+      <!-- Desktop sidebar -->
+      <aside class="hidden md:flex fixed inset-y-0 left-0 w-[250px] bg-[#153b30] text-white flex-col z-30 overflow-hidden">
+        <div class="absolute -top-20 -right-20 h-56 w-56 rounded-full bg-[#c6f36d]/10 blur-2xl"></div>
+        <div class="relative px-7 pt-8 pb-6 flex items-center gap-3">
+          <div class="h-11 w-11 rounded-2xl bg-[#c6f36d] text-[#153b30] flex items-center justify-center font-black text-lg shadow-lg">C</div>
+          <div>
+            <div class="font-semibold tracking-tight text-lg">Clarity</div>
+            <div class="text-white/50 text-xs">Personal Finance</div>
+          </div>
+        </div>
+
+        <nav class="relative px-4 space-y-1.5 flex-1">
+          <button v-for="item in navigation" :key="item.id" @click="navigate(item.id)"
+            class="sidebar-link relative w-full h-12 rounded-2xl flex items-center gap-3 px-4 text-sm font-medium text-white/65"
+            :class="{ active: activePage === item.id }">
+            <span class="nav-indicator absolute left-0 h-6 w-1 rounded-r-full bg-[#c6f36d]"></span>
+            <i :data-lucide="item.icon" class="h-[18px] w-[18px]"></i>
+            <span>{{ item.label }}</span>
+            <span v-if="item.id === 'transactions'" class="ml-auto min-w-6 h-6 px-1.5 rounded-full bg-white/10 flex items-center justify-center text-[10px]">{{ transactions.length }}</span>
+          </button>
+        </nav>
+
+        <div class="relative p-4">
+          <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-white/60">Monthly budget</span>
+              <span class="text-xs font-semibold">{{ budgetUsagePercent }}%</span>
+            </div>
+            <div class="h-2 rounded-full bg-white/10 overflow-hidden">
+              <div class="h-full rounded-full bg-[#c6f36d]" :style="{ width: Math.min(budgetUsagePercent, 100) + '%' }"></div>
+            </div>
+            <div class="mt-3 flex items-end justify-between">
+              <div>
+                <div class="text-lg font-semibold">{{ money(totalBudget - monthlyExpense) }}</div>
+                <div class="text-[11px] text-white/45">left this month</div>
+              </div>
+              <button @click="openQuickAdd('expense')" class="h-9 w-9 rounded-xl bg-[#c6f36d] text-[#153b30] flex items-center justify-center hover:scale-105 transition">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+          <button @click="navigate('settings')" class="mt-3 w-full rounded-2xl px-3 py-3 flex items-center gap-3 hover:bg-white/[0.06] transition">
+            <div class="h-9 w-9 rounded-full bg-gradient-to-br from-[#c6f36d] to-[#8d7cf7] flex items-center justify-center text-[#153b30] font-bold">LR</div>
+            <div class="text-left min-w-0">
+              <div class="text-sm font-medium truncate">Lemon Roti</div>
+              <div class="text-xs text-white/45 truncate">Personal workspace</div>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-white/40"></i>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="w-full md:ml-[250px] min-h-screen pb-28 md:pb-8">
+        <!-- Mobile header -->
+        <header class="md:hidden sticky top-0 z-20 px-4 pt-4 pb-3 bg-[#f4f6f2]/90 backdrop-blur-xl" :class="{ '!bg-[#0f1512]/90': darkMode }">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="h-10 w-10 rounded-2xl bg-[#153b30] text-[#c6f36d] flex items-center justify-center font-black">C</div>
+              <div>
+                <div class="text-xs text-slate-500">Good {{ greeting }},</div>
+                <div class="font-semibold text-slate-900 leading-tight">Lemon</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button @click="darkMode = !darkMode" class="h-10 w-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-700">
+                <i :data-lucide="darkMode ? 'sun' : 'moon'" class="w-[17px] h-[17px]"></i>
+              </button>
+              <button @click="openQuickAdd('expense')" class="h-10 w-10 rounded-2xl bg-[#153b30] text-white flex items-center justify-center shadow-lg">
+                <i data-lucide="plus" class="w-[18px] h-[18px]"></i>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div class="px-4 sm:px-6 lg:px-8 xl:px-10 max-w-[1500px] mx-auto">
+          <!-- Desktop topbar -->
+          <header class="hidden md:flex items-center justify-between pt-8 pb-6">
+            <div>
+              <div class="text-sm text-slate-500 mb-1">{{ currentDateLabel }}</div>
+              <h1 class="text-[30px] leading-tight font-semibold tracking-[-0.03em] text-slate-900">{{ pageTitle }}</h1>
+            </div>
+            <div class="flex items-center gap-3">
+              <button @click="darkMode = !darkMode" class="h-11 w-11 rounded-2xl bg-white border border-slate-200 text-slate-700 flex items-center justify-center hover:-translate-y-0.5 transition shadow-sm">
+                <i :data-lucide="darkMode ? 'sun' : 'moon'" class="w-[18px] h-[18px]"></i>
+              </button>
+              <button @click="exportCsv" class="h-11 rounded-2xl px-4 bg-white border border-slate-200 text-slate-700 flex items-center gap-2 font-medium text-sm hover:-translate-y-0.5 transition shadow-sm">
+                <i data-lucide="download" class="w-[17px] h-[17px]"></i>
+                Export
+              </button>
+              <button @click="openQuickAdd('expense')" class="h-11 rounded-2xl px-5 bg-[#153b30] text-white flex items-center gap-2 font-medium text-sm shadow-lg shadow-[#153b30]/15 hover:-translate-y-0.5 transition">
+                <i data-lucide="plus" class="w-[17px] h-[17px]"></i>
+                Add transaction
+              </button>
+            </div>
+          </header>
+
+          <transition name="slide" mode="out-in">
+            <!-- Dashboard -->
+            <section v-if="activePage === 'dashboard'" key="dashboard" class="space-y-5 md:space-y-6">
+              <div class="md:hidden pt-1 pb-1">
+                <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Money overview</h1>
+                <p class="text-sm text-slate-500 mt-1">Here’s how your month is going.</p>
+              </div>
+
+              <div class="grid grid-cols-1 xl:grid-cols-[1.45fr_.9fr] gap-5 md:gap-6">
+                <div class="rounded-[28px] md:rounded-[32px] p-5 md:p-7 bg-[#153b30] text-white relative overflow-hidden shadow-soft min-h-[250px]">
+                  <div class="absolute -right-20 -top-28 w-72 h-72 rounded-full bg-[#c6f36d]/15 blur-2xl"></div>
+                  <div class="absolute right-8 bottom-4 w-40 h-40 rounded-full border border-white/10"></div>
+                  <div class="absolute right-16 bottom-12 w-20 h-20 rounded-full bg-white/[0.04]"></div>
+                  <div class="relative h-full flex flex-col">
+                    <div class="flex items-start justify-between">
+                      <div>
+                        <div class="text-white/55 text-sm flex items-center gap-2">Total balance <i data-lucide="eye" class="w-4 h-4"></i></div>
+                        <div class="text-3xl md:text-[42px] leading-none tracking-[-0.04em] font-semibold mt-3">{{ money(totalBalance) }}</div>
+                        <div class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/[0.09] px-3 py-1.5 text-xs text-white/75">
+                          <i data-lucide="trending-up" class="w-3.5 h-3.5 text-[#c6f36d]"></i>
+                          {{ money(monthlyIncome - monthlyExpense) }} net this month
+                        </div>
+                      </div>
+                      <button @click="navigate('accounts')" class="h-10 w-10 rounded-2xl bg-white/[0.09] flex items-center justify-center hover:bg-white/[0.15] transition">
+                        <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                      </button>
+                    </div>
+                    <div class="mt-auto pt-7 grid grid-cols-2 gap-3 max-w-lg">
+                      <button @click="openQuickAdd('expense')" class="rounded-2xl bg-[#c6f36d] text-[#153b30] px-4 py-3 flex items-center justify-center gap-2 font-semibold text-sm hover:brightness-95 transition">
+                        <span class="h-7 w-7 rounded-xl bg-[#153b30]/10 flex items-center justify-center"><i data-lucide="minus" class="w-4 h-4"></i></span>
+                        Add expense
+                      </button>
+                      <button @click="openQuickAdd('income')" class="rounded-2xl bg-white/[0.09] border border-white/10 px-4 py-3 flex items-center justify-center gap-2 font-semibold text-sm hover:bg-white/[0.14] transition">
+                        <span class="h-7 w-7 rounded-xl bg-white/10 flex items-center justify-center"><i data-lucide="plus" class="w-4 h-4"></i></span>
+                        Add income
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card p-5 md:p-6 flex flex-col">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="text-sm text-slate-500">Monthly budget</div>
+                      <div class="text-xl font-semibold text-slate-900 mt-1">{{ money(totalBudget - monthlyExpense) }} left</div>
+                    </div>
+                    <button @click="navigate('budgets')" class="h-9 w-9 rounded-xl bg-[#eef3ee] text-[#153b30] flex items-center justify-center">
+                      <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                  <div class="flex-1 flex items-center justify-center py-5">
+                    <div class="relative h-40 w-40">
+                      <svg viewBox="0 0 120 120" class="h-full w-full -rotate-90">
+                        <circle cx="60" cy="60" r="49" fill="none" stroke="#edf0ec" stroke-width="10" />
+                        <circle cx="60" cy="60" r="49" fill="none" stroke="#163f32" stroke-width="10" stroke-linecap="round"
+                          :stroke-dasharray="307.88" :stroke-dashoffset="307.88 * (1 - Math.min(budgetUsagePercent,100) / 100)" class="transition-all duration-700" />
+                      </svg>
+                      <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <div class="text-3xl font-semibold text-slate-900">{{ budgetUsagePercent }}%</div>
+                        <div class="text-xs text-slate-500">used</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="rounded-2xl bg-[#f3f6f3] p-3">
+                      <div class="text-xs text-slate-500">Spent</div>
+                      <div class="text-sm font-semibold mt-1 text-slate-900">{{ money(monthlyExpense) }}</div>
+                    </div>
+                    <div class="rounded-2xl bg-[#f3f6f3] p-3">
+                      <div class="text-xs text-slate-500">Limit</div>
+                      <div class="text-sm font-semibold mt-1 text-slate-900">{{ money(totalBudget) }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+                <div class="card metric-card p-4 md:p-5">
+                  <div class="flex items-center justify-between">
+                    <div class="h-10 w-10 rounded-2xl bg-[#e4f0e9] text-[#153b30] flex items-center justify-center"><i data-lucide="arrow-down-left" class="w-[18px] h-[18px]"></i></div>
+                    <span class="text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded-full px-2 py-1">Income</span>
+                  </div>
+                  <div class="mt-4 text-xs text-slate-500">This month</div>
+                  <div class="mt-1 text-lg md:text-2xl font-semibold tracking-tight text-slate-900">{{ money(monthlyIncome) }}</div>
+                </div>
+                <div class="card metric-card p-4 md:p-5">
+                  <div class="flex items-center justify-between">
+                    <div class="h-10 w-10 rounded-2xl bg-[#fff0ed] text-[#ef6f5d] flex items-center justify-center"><i data-lucide="arrow-up-right" class="w-[18px] h-[18px]"></i></div>
+                    <span class="text-[11px] font-medium text-rose-700 bg-rose-50 rounded-full px-2 py-1">Expense</span>
+                  </div>
+                  <div class="mt-4 text-xs text-slate-500">This month</div>
+                  <div class="mt-1 text-lg md:text-2xl font-semibold tracking-tight text-slate-900">{{ money(monthlyExpense) }}</div>
+                </div>
+                <div class="card metric-card p-4 md:p-5">
+                  <div class="flex items-center justify-between">
+                    <div class="h-10 w-10 rounded-2xl bg-[#eeebff] text-[#7765e6] flex items-center justify-center"><i data-lucide="piggy-bank" class="w-[18px] h-[18px]"></i></div>
+                    <span class="text-[11px] font-medium text-violet-700 bg-violet-50 rounded-full px-2 py-1">Saved</span>
+                  </div>
+                  <div class="mt-4 text-xs text-slate-500">This month</div>
+                  <div class="mt-1 text-lg md:text-2xl font-semibold tracking-tight text-slate-900">{{ money(monthlyIncome - monthlyExpense) }}</div>
+                </div>
+                <div class="card metric-card p-4 md:p-5">
+                  <div class="flex items-center justify-between">
+                    <div class="h-10 w-10 rounded-2xl bg-[#e9f1ff] text-[#4f8cff] flex items-center justify-center"><i data-lucide="wallet-cards" class="w-[18px] h-[18px]"></i></div>
+                    <span class="text-[11px] font-medium text-blue-700 bg-blue-50 rounded-full px-2 py-1">Accounts</span>
+                  </div>
+                  <div class="mt-4 text-xs text-slate-500">Active</div>
+                  <div class="mt-1 text-lg md:text-2xl font-semibold tracking-tight text-slate-900">{{ accounts.length }}</div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 xl:grid-cols-[1.35fr_.85fr] gap-5 md:gap-6">
+                <div class="card p-5 md:p-6 min-w-0">
+                  <div class="flex items-start justify-between gap-4 mb-5">
+                    <div>
+                      <h2 class="text-lg font-semibold text-slate-900">Cash flow</h2>
+                      <p class="text-sm text-slate-500 mt-1">Income and spending over six months</p>
+                    </div>
+                    <select v-model="chartRange" @change="scheduleCharts" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus-ring">
+                      <option value="6">6 months</option>
+                      <option value="3">3 months</option>
+                    </select>
+                  </div>
+                  <div class="h-[245px]"><canvas id="cashFlowChart"></canvas></div>
+                </div>
+
+                <div class="card p-5 md:p-6">
+                  <div class="flex items-center justify-between mb-5">
+                    <div>
+                      <h2 class="text-lg font-semibold text-slate-900">Top spending</h2>
+                      <p class="text-sm text-slate-500 mt-1">By category this month</p>
+                    </div>
+                    <button @click="navigate('reports')" class="text-sm font-medium text-[#153b30]">View all</button>
+                  </div>
+                  <div class="space-y-4">
+                    <div v-for="item in topCategories.slice(0,5)" :key="item.name">
+                      <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                          <div class="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" :style="{ background: item.soft, color: item.color }"><i :data-lucide="item.icon" class="w-4 h-4"></i></div>
+                          <div class="min-w-0">
+                            <div class="text-sm font-medium text-slate-800 truncate">{{ item.name }}</div>
+                            <div class="text-[11px] text-slate-500">{{ item.count }} transactions</div>
+                          </div>
+                        </div>
+                        <div class="text-sm font-semibold text-slate-900">{{ money(item.amount) }}</div>
+                      </div>
+                      <div class="h-1.5 rounded-full progress-track overflow-hidden">
+                        <div class="h-full rounded-full progress-bar" :style="{ width: Math.min((item.amount / Math.max(monthlyExpense,1))*100,100) + '%', background: item.color }"></div>
+                      </div>
+                    </div>
+                    <div v-if="!topCategories.length" class="py-10 text-center text-sm text-slate-500">No expenses this month.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card overflow-hidden">
+                <div class="p-5 md:p-6 flex items-center justify-between">
+                  <div>
+                    <h2 class="text-lg font-semibold text-slate-900">Recent transactions</h2>
+                    <p class="text-sm text-slate-500 mt-1">Your latest account activity</p>
+                  </div>
+                  <button @click="navigate('transactions')" class="rounded-xl px-3 py-2 text-sm font-medium text-[#153b30] bg-[#edf4ef]">View all</button>
+                </div>
+                <div class="border-t border-slate-100">
+                  <div v-for="transaction in sortedTransactions.slice(0,6)" :key="transaction.id" class="transaction-row px-5 md:px-6 py-4 flex items-center gap-3 border-b border-slate-100 last:border-b-0">
+                    <div class="h-11 w-11 rounded-2xl flex items-center justify-center shrink-0" :style="categoryStyle(transaction.category)">
+                      <i :data-lucide="categoryIcon(transaction.category)" class="w-[18px] h-[18px]"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-medium text-slate-800 truncate">{{ transaction.merchant || transaction.category }}</div>
+                      <div class="text-xs text-slate-500 mt-0.5 truncate">{{ transaction.category }} · {{ accountName(transaction.accountId) }}</div>
+                    </div>
+                    <div class="text-right shrink-0">
+                      <div class="text-sm font-semibold" :class="transaction.type === 'income' ? 'text-emerald-600' : transaction.type === 'transfer' ? 'text-blue-600' : 'text-slate-900'">
+                        {{ transaction.type === 'income' ? '+' : transaction.type === 'expense' ? '-' : '' }}{{ money(transaction.amount) }}
+                      </div>
+                      <div class="text-[11px] text-slate-400 mt-0.5">{{ shortDate(transaction.date) }}</div>
+                    </div>
+                  </div>
+                  <div v-if="!transactions.length" class="p-10 text-center text-sm text-slate-500">No transactions yet.</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Transactions -->
+            <section v-else-if="activePage === 'transactions'" key="transactions" class="space-y-5">
+              <div class="md:hidden pt-1">
+                <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Transactions</h1>
+                <p class="text-sm text-slate-500 mt-1">Every movement, in one place.</p>
+              </div>
+              <div class="card p-4 md:p-5">
+                <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+                  <div class="relative flex-1">
+                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                    <input v-model="searchQuery" type="search" placeholder="Search merchant, category or note" class="focus-ring w-full h-11 pl-11 pr-4 rounded-2xl border border-slate-200 bg-[#fbfcfa] text-sm" />
+                  </div>
+                  <div class="grid grid-cols-2 sm:flex gap-2">
+                    <select v-model="typeFilter" class="focus-ring h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-600">
+                      <option value="all">All types</option>
+                      <option value="expense">Expense</option>
+                      <option value="income">Income</option>
+                      <option value="transfer">Transfer</option>
+                    </select>
+                    <select v-model="accountFilter" class="focus-ring h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-600">
+                      <option value="all">All accounts</option>
+                      <option v-for="account in accounts" :value="account.id" :key="account.id">{{ account.name }}</option>
+                    </select>
+                    <button @click="openQuickAdd('expense')" class="col-span-2 h-11 rounded-2xl px-4 bg-[#153b30] text-white flex items-center justify-center gap-2 font-medium text-sm lg:hidden">
+                      <i data-lucide="plus" class="w-4 h-4"></i>Add transaction
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-5">
+                <div class="card p-5">
+                  <div class="text-xs text-slate-500">Showing</div>
+                  <div class="text-2xl font-semibold text-slate-900 mt-1">{{ filteredTransactions.length }}</div>
+                  <div class="text-xs text-slate-400 mt-1">matching entries</div>
+                </div>
+                <div class="card p-5">
+                  <div class="text-xs text-slate-500">Filtered expense</div>
+                  <div class="text-2xl font-semibold text-slate-900 mt-1">{{ money(filteredExpense) }}</div>
+                  <div class="text-xs text-rose-500 mt-1">money out</div>
+                </div>
+                <div class="card p-5">
+                  <div class="text-xs text-slate-500">Filtered income</div>
+                  <div class="text-2xl font-semibold text-slate-900 mt-1">{{ money(filteredIncome) }}</div>
+                  <div class="text-xs text-emerald-600 mt-1">money in</div>
+                </div>
+              </div>
+
+              <div class="card overflow-hidden">
+                <div class="hidden md:grid grid-cols-[1.4fr_.8fr_.8fr_.65fr_44px] gap-4 px-6 py-3.5 border-b border-slate-100 bg-[#fafbf9] text-[11px] uppercase tracking-wider font-semibold text-slate-400">
+                  <div>Transaction</div><div>Account</div><div>Date</div><div class="text-right">Amount</div><div></div>
+                </div>
+                <div v-for="transaction in filteredTransactions" :key="transaction.id" class="transaction-row px-4 md:px-6 py-4 border-b border-slate-100 last:border-0">
+                  <div class="md:grid md:grid-cols-[1.4fr_.8fr_.8fr_.65fr_44px] md:gap-4 md:items-center flex items-center gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <div class="h-11 w-11 rounded-2xl flex items-center justify-center shrink-0" :style="categoryStyle(transaction.category)">
+                        <i :data-lucide="categoryIcon(transaction.category)" class="w-[18px] h-[18px]"></i>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="font-medium text-sm text-slate-800 truncate">{{ transaction.merchant || transaction.category }}</div>
+                        <div class="text-xs text-slate-500 truncate mt-0.5">{{ transaction.category }}<span v-if="transaction.note"> · {{ transaction.note }}</span></div>
+                      </div>
+                    </div>
+                    <div class="hidden md:block text-sm text-slate-600">{{ accountName(transaction.accountId) }}</div>
+                    <div class="hidden md:block text-sm text-slate-500">{{ fullDate(transaction.date) }}</div>
+                    <div class="ml-auto md:ml-0 text-right">
+                      <div class="font-semibold text-sm" :class="transaction.type === 'income' ? 'text-emerald-600' : transaction.type === 'transfer' ? 'text-blue-600' : 'text-slate-900'">
+                        {{ transaction.type === 'income' ? '+' : transaction.type === 'expense' ? '-' : '' }}{{ money(transaction.amount) }}
+                      </div>
+                      <div class="md:hidden text-[11px] text-slate-400 mt-0.5">{{ shortDate(transaction.date) }}</div>
+                    </div>
+                    <button @click="deleteTransaction(transaction.id)" title="Delete" class="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition shrink-0">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="!filteredTransactions.length" class="py-16 text-center">
+                  <div class="h-14 w-14 rounded-2xl bg-slate-100 mx-auto flex items-center justify-center text-slate-400"><i data-lucide="search-x" class="w-6 h-6"></i></div>
+                  <div class="font-medium text-slate-700 mt-4">No transactions found</div>
+                  <div class="text-sm text-slate-500 mt-1">Try changing the filters or add a new entry.</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Budgets -->
+            <section v-else-if="activePage === 'budgets'" key="budgets" class="space-y-5 md:space-y-6">
+              <div class="md:hidden pt-1">
+                <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Budgets</h1>
+                <p class="text-sm text-slate-500 mt-1">Plan your month before it happens.</p>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-[1.1fr_.9fr] gap-5 md:gap-6">
+                <div class="rounded-[28px] bg-[#153b30] text-white p-6 md:p-7 relative overflow-hidden min-h-[230px] shadow-soft">
+                  <div class="absolute right-[-4rem] top-[-5rem] h-60 w-60 rounded-full bg-[#c6f36d]/15 blur-xl"></div>
+                  <div class="relative">
+                    <div class="text-sm text-white/55">July budget overview</div>
+                    <div class="mt-3 flex items-end gap-2">
+                      <div class="text-4xl font-semibold tracking-tight">{{ money(monthlyExpense) }}</div>
+                      <div class="text-white/50 text-sm pb-1">of {{ money(totalBudget) }}</div>
+                    </div>
+                    <div class="mt-6 h-3 rounded-full bg-white/10 overflow-hidden max-w-2xl">
+                      <div class="h-full bg-[#c6f36d] rounded-full" :style="{ width: Math.min(budgetUsagePercent,100)+'%' }"></div>
+                    </div>
+                    <div class="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-sm">
+                      <div><span class="text-white/50">Remaining</span><div class="font-semibold mt-0.5">{{ money(totalBudget-monthlyExpense) }}</div></div>
+                      <div><span class="text-white/50">Daily allowance</span><div class="font-semibold mt-0.5">{{ money(Math.max(totalBudget-monthlyExpense,0)/10) }}</div></div>
+                      <div><span class="text-white/50">Status</span><div class="font-semibold mt-0.5" :class="budgetUsagePercent > 100 ? 'text-[#ff8d7c]' : 'text-[#c6f36d]'">{{ budgetUsagePercent > 100 ? 'Over budget' : 'On track' }}</div></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card p-6">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="text-sm text-slate-500">Budget health</div>
+                      <div class="text-xl font-semibold text-slate-900 mt-1">{{ healthyBudgetCount }} of {{ budgets.length }} on track</div>
+                    </div>
+                    <div class="h-12 w-12 rounded-2xl bg-[#e4f0e9] text-[#153b30] flex items-center justify-center"><i data-lucide="shield-check" class="w-5 h-5"></i></div>
+                  </div>
+                  <div class="mt-6 space-y-3">
+                    <div class="flex items-center justify-between text-sm"><span class="text-slate-500">Planned</span><span class="font-semibold text-slate-800">{{ money(totalBudget) }}</span></div>
+                    <div class="flex items-center justify-between text-sm"><span class="text-slate-500">Spent</span><span class="font-semibold text-slate-800">{{ money(monthlyExpense) }}</span></div>
+                    <div class="border-t border-slate-100 pt-3 flex items-center justify-between text-sm"><span class="text-slate-500">Available</span><span class="font-semibold text-emerald-600">{{ money(totalBudget-monthlyExpense) }}</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+                <div v-for="budget in budgetDetails" :key="budget.category" class="card p-5 md:p-6">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <div class="h-11 w-11 rounded-2xl flex items-center justify-center" :style="categoryStyle(budget.category)"><i :data-lucide="categoryIcon(budget.category)" class="w-[18px] h-[18px]"></i></div>
+                      <div>
+                        <div class="font-semibold text-slate-800">{{ budget.category }}</div>
+                        <div class="text-xs mt-0.5" :class="budget.percent > 100 ? 'text-rose-500' : 'text-slate-500'">{{ budget.percent > 100 ? money(budget.spent-budget.limit)+' over limit' : money(budget.limit-budget.spent)+' remaining' }}</div>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-semibold text-slate-900">{{ money(budget.spent) }}</div>
+                      <div class="text-xs text-slate-400">of {{ money(budget.limit) }}</div>
+                    </div>
+                  </div>
+                  <div class="mt-5 h-2.5 rounded-full progress-track overflow-hidden">
+                    <div class="h-full rounded-full progress-bar" :style="{ width: Math.min(budget.percent,100)+'%', background: budget.percent > 100 ? '#ff806e' : budget.color }"></div>
+                  </div>
+                  <div class="mt-3 flex items-center justify-between text-xs">
+                    <span class="text-slate-400">{{ budget.transactionCount }} transactions</span>
+                    <span class="font-semibold" :class="budget.percent > 100 ? 'text-rose-500' : 'text-slate-600'">{{ budget.percent }}%</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Accounts -->
+            <section v-else-if="activePage === 'accounts'" key="accounts" class="space-y-5 md:space-y-6">
+              <div class="md:hidden pt-1">
+                <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Accounts</h1>
+                <p class="text-sm text-slate-500 mt-1">Everything you own and owe.</p>
+              </div>
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+                <div class="lg:col-span-2 rounded-[28px] bg-gradient-to-br from-[#172f28] to-[#1b4739] p-6 md:p-7 text-white relative overflow-hidden shadow-soft">
+                  <div class="absolute -right-8 -bottom-16 w-60 h-60 rounded-full border-[35px] border-white/[0.035]"></div>
+                  <div class="relative">
+                    <div class="text-sm text-white/55">Net worth</div>
+                    <div class="text-4xl md:text-5xl font-semibold tracking-[-0.04em] mt-3">{{ money(netWorth) }}</div>
+                    <div class="mt-4 inline-flex items-center gap-2 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs text-white/70"><i data-lucide="sparkles" class="w-3.5 h-3.5 text-[#c6f36d]"></i>Updated from all account activity</div>
+                    <div class="grid grid-cols-2 gap-3 mt-8 max-w-xl">
+                      <div class="rounded-2xl bg-white/[0.07] border border-white/[0.06] p-4"><div class="text-xs text-white/45">Assets</div><div class="text-xl font-semibold mt-1">{{ money(totalAssets) }}</div></div>
+                      <div class="rounded-2xl bg-white/[0.07] border border-white/[0.06] p-4"><div class="text-xs text-white/45">Liabilities</div><div class="text-xl font-semibold mt-1">{{ money(totalLiabilities) }}</div></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card p-6">
+                  <div class="flex items-center justify-between"><div><div class="text-sm text-slate-500">Cash ratio</div><div class="text-2xl font-semibold text-slate-900 mt-1">{{ cashRatio }}%</div></div><div class="h-12 w-12 rounded-2xl bg-[#e9f1ff] text-[#4f8cff] flex items-center justify-center"><i data-lucide="badge-percent" class="w-5 h-5"></i></div></div>
+                  <p class="text-sm text-slate-500 mt-5 leading-relaxed">Share of your assets held in cash, bank, and e-wallet accounts.</p>
+                  <div class="mt-5 h-2 rounded-full progress-track overflow-hidden"><div class="h-full bg-[#4f8cff] rounded-full" :style="{width: cashRatio+'%'}"></div></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <div><h2 class="text-lg font-semibold text-slate-900">Your accounts</h2><p class="text-sm text-slate-500 mt-1">Live balances calculated from transactions</p></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
+                  <div v-for="account in accountDetails" :key="account.id" class="card p-5 md:p-6 metric-card">
+                    <div class="flex items-start justify-between">
+                      <div class="h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-sm" :style="{background: account.color}"><i :data-lucide="account.icon" class="w-5 h-5"></i></div>
+                      <span class="rounded-full px-2.5 py-1 text-[11px] font-medium" :class="account.kind === 'liability' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-700'">{{ account.kind }}</span>
+                    </div>
+                    <div class="mt-5 text-sm text-slate-500">{{ account.name }}</div>
+                    <div class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{{ money(account.balance) }}</div>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs"><span class="text-slate-400">{{ account.type }}</span><span :class="account.monthChange >= 0 ? 'text-emerald-600' : 'text-rose-500'">{{ account.monthChange >= 0 ? '+' : '' }}{{ money(account.monthChange) }} this month</span></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Reports -->
+            <section v-else-if="activePage === 'reports'" key="reports" class="space-y-5 md:space-y-6">
+              <div class="md:hidden pt-1">
+                <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Reports</h1>
+                <p class="text-sm text-slate-500 mt-1">Turn your transactions into insight.</p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-5">
+                <div class="card p-5"><div class="text-xs text-slate-500">Savings rate</div><div class="text-3xl font-semibold text-slate-900 mt-2">{{ savingsRate }}%</div><div class="mt-2 text-xs text-emerald-600">{{ savingsRate >= 20 ? 'Healthy this month' : 'Room to improve' }}</div></div>
+                <div class="card p-5"><div class="text-xs text-slate-500">Avg. daily spend</div><div class="text-3xl font-semibold text-slate-900 mt-2">{{ money(monthlyExpense/21) }}</div><div class="mt-2 text-xs text-slate-400">Across July so far</div></div>
+                <div class="card p-5"><div class="text-xs text-slate-500">Largest category</div><div class="text-3xl font-semibold text-slate-900 mt-2 truncate">{{ topCategories[0]?.name || '—' }}</div><div class="mt-2 text-xs text-rose-500">{{ money(topCategories[0]?.amount || 0) }}</div></div>
+              </div>
+              <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_.9fr] gap-5 md:gap-6">
+                <div class="card p-5 md:p-6 min-w-0"><div class="mb-5"><h2 class="text-lg font-semibold text-slate-900">Income vs expense</h2><p class="text-sm text-slate-500 mt-1">Six-month movement</p></div><div class="h-[300px]"><canvas id="reportTrendChart"></canvas></div></div>
+                <div class="card p-5 md:p-6 min-w-0"><div class="mb-5"><h2 class="text-lg font-semibold text-slate-900">Spending mix</h2><p class="text-sm text-slate-500 mt-1">Where your money went this month</p></div><div class="h-[300px]"><canvas id="categoryChart"></canvas></div></div>
+              </div>
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-6">
+                <div class="card p-5 md:p-6">
+                  <h2 class="text-lg font-semibold text-slate-900">Smart observations</h2>
+                  <div class="mt-5 space-y-4">
+                    <div class="rounded-2xl bg-[#f3f7f4] p-4 flex gap-3"><div class="h-9 w-9 rounded-xl bg-[#153b30] text-[#c6f36d] flex items-center justify-center shrink-0"><i data-lucide="lightbulb" class="w-4 h-4"></i></div><div><div class="text-sm font-medium text-slate-800">Your strongest opportunity</div><p class="text-xs text-slate-500 mt-1 leading-relaxed">Reducing {{ topCategories[0]?.name || 'your top category' }} by 10% would save about {{ money((topCategories[0]?.amount || 0)*0.1) }} this month.</p></div></div>
+                    <div class="rounded-2xl bg-[#fff5f2] p-4 flex gap-3"><div class="h-9 w-9 rounded-xl bg-[#ff806e] text-white flex items-center justify-center shrink-0"><i data-lucide="alert-circle" class="w-4 h-4"></i></div><div><div class="text-sm font-medium text-slate-800">Budget attention</div><p class="text-xs text-slate-500 mt-1 leading-relaxed">{{ overBudgetCount ? overBudgetCount+' categories are currently above their limits.' : 'All categories are still within their monthly limits.' }}</p></div></div>
+                  </div>
+                </div>
+                <div class="card p-5 md:p-6">
+                  <h2 class="text-lg font-semibold text-slate-900">Category detail</h2>
+                  <div class="mt-5 space-y-3">
+                    <div v-for="item in topCategories" :key="item.name" class="flex items-center gap-3 py-2">
+                      <div class="h-9 w-9 rounded-xl flex items-center justify-center" :style="{background:item.soft,color:item.color}"><i :data-lucide="item.icon" class="w-4 h-4"></i></div>
+                      <div class="flex-1 min-w-0"><div class="flex justify-between gap-3"><span class="text-sm font-medium text-slate-700 truncate">{{ item.name }}</span><span class="text-sm font-semibold text-slate-900">{{ money(item.amount) }}</span></div><div class="text-[11px] text-slate-400 mt-0.5">{{ Math.round(item.amount/Math.max(monthlyExpense,1)*100) }}% of expense</div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Settings -->
+            <section v-else key="settings" class="space-y-5 md:space-y-6">
+              <div class="md:hidden pt-1"><h1 class="text-2xl font-semibold tracking-tight text-slate-900">Settings</h1><p class="text-sm text-slate-500 mt-1">Make Clarity feel like yours.</p></div>
+              <div class="grid grid-cols-1 lg:grid-cols-[.8fr_1.2fr] gap-5 md:gap-6">
+                <div class="card p-6">
+                  <div class="flex items-center gap-4"><div class="h-16 w-16 rounded-3xl bg-gradient-to-br from-[#c6f36d] to-[#8d7cf7] flex items-center justify-center text-[#153b30] text-xl font-bold">LR</div><div><div class="font-semibold text-lg text-slate-900">Lemon Roti</div><div class="text-sm text-slate-500 mt-0.5">Personal workspace</div></div></div>
+                  <div class="mt-6 pt-5 border-t border-slate-100 space-y-3 text-sm"><div class="flex justify-between"><span class="text-slate-500">Transactions</span><span class="font-semibold text-slate-800">{{ transactions.length }}</span></div><div class="flex justify-between"><span class="text-slate-500">Accounts</span><span class="font-semibold text-slate-800">{{ accounts.length }}</span></div><div class="flex justify-between"><span class="text-slate-500">Storage</span><span class="font-semibold text-emerald-600">Local browser</span></div></div>
+                </div>
+                <div class="card overflow-hidden">
+                  <div class="p-5 md:p-6 border-b border-slate-100"><h2 class="text-lg font-semibold text-slate-900">Preferences</h2><p class="text-sm text-slate-500 mt-1">Display and data controls</p></div>
+                  <div class="divide-y divide-slate-100">
+                    <div class="p-5 md:p-6 flex items-center justify-between gap-4"><div><div class="font-medium text-sm text-slate-800">Dark appearance</div><div class="text-xs text-slate-500 mt-1">Switch the interface to a dark canvas.</div></div><button @click="darkMode=!darkMode" class="h-7 w-12 rounded-full p-1 transition" :class="darkMode ? 'bg-[#153b30]' : 'bg-slate-200'"><span class="block h-5 w-5 rounded-full bg-white shadow transition" :class="darkMode ? 'translate-x-5' : ''"></span></button></div>
+                    <div class="p-5 md:p-6 flex items-center justify-between gap-4"><div><div class="font-medium text-sm text-slate-800">Currency</div><div class="text-xs text-slate-500 mt-1">Used for all values in this prototype.</div></div><select v-model="currency" class="focus-ring rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"><option value="MYR">MYR · RM</option><option value="USD">USD · $</option><option value="SGD">SGD · S$</option></select></div>
+                    <div class="p-5 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><div class="font-medium text-sm text-slate-800">Export your transactions</div><div class="text-xs text-slate-500 mt-1">Download the current ledger as a CSV file.</div></div><button @click="exportCsv" class="h-10 rounded-xl px-4 bg-[#edf4ef] text-[#153b30] font-medium text-sm flex items-center justify-center gap-2"><i data-lucide="download" class="w-4 h-4"></i>Export CSV</button></div>
+                    <div class="p-5 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><div class="font-medium text-sm text-slate-800">Reset sample data</div><div class="text-xs text-slate-500 mt-1">Remove your changes and restore the original demo.</div></div><button @click="resetDemo" class="h-10 rounded-xl px-4 bg-rose-50 text-rose-600 font-medium text-sm flex items-center justify-center gap-2"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset demo</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="rounded-3xl border border-dashed border-slate-300 p-5 md:p-6 flex gap-4"><div class="h-11 w-11 rounded-2xl bg-[#e9f1ff] text-[#4f8cff] flex items-center justify-center shrink-0"><i data-lucide="cloud-off" class="w-5 h-5"></i></div><div><div class="font-semibold text-slate-800">Prototype storage notice</div><p class="text-sm text-slate-500 mt-1 leading-relaxed">This version saves transactions only inside this browser using localStorage. Clearing browser data removes them. Cross-device sync will require a backend such as Supabase.</p></div></div>
+            </section>
+          </transition>
+        </div>
+      </main>
+    </div>
+
+    <!-- Mobile navigation -->
+    <nav class="md:hidden fixed left-3 right-3 bottom-3 z-30 rounded-[26px] bg-[#153b30]/95 backdrop-blur-xl shadow-2xl safe-bottom px-2 pt-2">
+      <div class="grid grid-cols-5 items-center">
+        <button v-for="item in mobileNavigation" :key="item.id" @click="navigate(item.id)" class="h-14 rounded-2xl flex flex-col items-center justify-center gap-1 transition relative" :class="activePage===item.id ? 'text-[#c6f36d]' : 'text-white/45'">
+          <span v-if="activePage===item.id" class="absolute top-0.5 w-5 h-0.5 rounded-full bg-[#c6f36d]"></span>
+          <i :data-lucide="item.icon" class="w-[18px] h-[18px]"></i><span class="text-[9px] font-medium">{{ item.mobileLabel || item.label }}</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Quick Add modal -->
+    <transition name="fade">
+      <div v-if="showQuickAdd" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/45 backdrop-blur-sm p-0 sm:p-4" @click.self="closeQuickAdd">
+        <div class="modal-panel w-full sm:max-w-[520px] max-h-[92vh] overflow-y-auto scrollbar-thin bg-white rounded-t-[30px] sm:rounded-[30px] shadow-2xl">
+          <div class="sticky top-0 z-10 bg-white/95 backdrop-blur-xl px-5 md:px-6 pt-5 pb-4 border-b border-slate-100">
+            <div class="sm:hidden mx-auto mb-4 h-1.5 w-11 rounded-full bg-slate-200"></div>
+            <div class="flex items-center justify-between">
+              <div><h2 class="text-xl font-semibold tracking-tight text-slate-900">Add transaction</h2><p class="text-sm text-slate-500 mt-1">Record it in a few seconds.</p></div>
+              <button @click="closeQuickAdd" class="h-10 w-10 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+          <form @submit.prevent="submitTransaction" class="p-5 md:p-6 space-y-5">
+            <div class="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-slate-100">
+              <button type="button" v-for="type in ['expense','income','transfer']" :key="type" @click="form.type=type; setDefaultCategory()" class="h-10 rounded-xl text-sm font-medium capitalize transition" :class="form.type===type ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">{{ type }}</button>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Amount</label>
+              <div class="rounded-3xl bg-[#f3f6f3] px-5 py-4 flex items-center gap-3 border border-transparent focus-within:border-[#4f8cff] focus-within:ring-4 focus-within:ring-blue-100 transition">
+                <span class="text-xl font-semibold text-slate-500">{{ currencySymbol }}</span>
+                <input v-model.number="form.amount" type="number" step="0.01" min="0.01" required autofocus placeholder="0.00" class="w-full bg-transparent border-0 outline-none text-3xl font-semibold tracking-tight text-slate-900 placeholder:text-slate-300" />
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label class="block text-xs font-semibold text-slate-500 mb-2">Account</label><select v-model="form.accountId" required class="focus-ring w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700"><option v-for="account in accounts" :value="account.id" :key="account.id">{{ account.name }}</option></select></div>
+              <div v-if="form.type==='transfer'"><label class="block text-xs font-semibold text-slate-500 mb-2">To account</label><select v-model="form.toAccountId" required class="focus-ring w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700"><option v-for="account in accounts.filter(a=>a.id!==form.accountId)" :value="account.id" :key="account.id">{{ account.name }}</option></select></div>
+              <div v-else><label class="block text-xs font-semibold text-slate-500 mb-2">Category</label><select v-model="form.category" required class="focus-ring w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700"><option v-for="category in availableCategories" :value="category" :key="category">{{ category }}</option></select></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label class="block text-xs font-semibold text-slate-500 mb-2">Merchant / source</label><input v-model.trim="form.merchant" type="text" :placeholder="form.type==='income' ? 'e.g. Salary' : form.type==='transfer' ? 'e.g. Move savings' : 'e.g. Village Park'" class="focus-ring w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700" /></div>
+              <div><label class="block text-xs font-semibold text-slate-500 mb-2">Date</label><input v-model="form.date" type="date" required class="focus-ring w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700" /></div>
+            </div>
+            <div><label class="block text-xs font-semibold text-slate-500 mb-2">Note <span class="font-normal text-slate-400">optional</span></label><textarea v-model.trim="form.note" rows="2" placeholder="Add a little context" class="focus-ring w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 resize-none"></textarea></div>
+            <div v-if="formError" class="rounded-2xl bg-rose-50 text-rose-600 px-4 py-3 text-sm flex items-center gap-2"><i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>{{ formError }}</div>
+            <button type="submit" class="w-full h-13 min-h-[52px] rounded-2xl bg-[#153b30] text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-[#153b30]/15 hover:-translate-y-0.5 transition"><i data-lucide="check" class="w-4 h-4"></i>Save transaction</button>
+          </form>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Toast -->
+    <transition name="slide">
+      <div v-if="toast" class="fixed z-[60] left-1/2 -translate-x-1/2 bottom-24 md:bottom-7 rounded-2xl bg-[#17211b] text-white px-4 py-3 shadow-2xl flex items-center gap-2 text-sm font-medium whitespace-nowrap">
+        <span class="h-6 w-6 rounded-full bg-[#c6f36d] text-[#153b30] flex items-center justify-center"><i data-lucide="check" class="w-3.5 h-3.5"></i></span>{{ toast }}
+      </div>
+    </transition>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const STORAGE_KEY = 'clarity-budget-prototype-v1';
+        const currentYear = 2026;
+        const currentMonth = 6; // July, zero-based
+
+        const navigation = [
+          { id: 'dashboard', label: 'Overview', mobileLabel: 'Home', icon: 'layout-dashboard' },
+          { id: 'transactions', label: 'Transactions', mobileLabel: 'Activity', icon: 'arrow-left-right' },
+          { id: 'budgets', label: 'Budgets', mobileLabel: 'Budget', icon: 'chart-no-axes-column-increasing' },
+          { id: 'accounts', label: 'Accounts', mobileLabel: 'Accounts', icon: 'wallet-cards' },
+          { id: 'reports', label: 'Reports', mobileLabel: 'Reports', icon: 'pie-chart' },
+          { id: 'settings', label: 'Settings', mobileLabel: 'Settings', icon: 'settings-2' }
+        ];
+        const mobileNavigation = navigation.filter(item => item.id !== 'settings');
+
+        const categoryMeta = {
+          Food: { icon: 'utensils', color: '#ef7b66', soft: '#fff0ed' },
+          Transport: { icon: 'car', color: '#4f8cff', soft: '#e9f1ff' },
+          Shopping: { icon: 'shopping-bag', color: '#8d7cf7', soft: '#eeebff' },
+          Bills: { icon: 'receipt-text', color: '#d39b28', soft: '#fff7df' },
+          Entertainment: { icon: 'popcorn', color: '#df66a5', soft: '#fff0f8' },
+          Health: { icon: 'heart-pulse', color: '#2aa883', soft: '#e6f5ef' },
+          Education: { icon: 'graduation-cap', color: '#5776d9', soft: '#edf1ff' },
+          Others: { icon: 'shapes', color: '#78827a', soft: '#eef0ee' },
+          Salary: { icon: 'briefcase-business', color: '#2aa883', soft: '#e6f5ef' },
+          Freelance: { icon: 'laptop', color: '#4f8cff', soft: '#e9f1ff' },
+          'Other Income': { icon: 'circle-dollar-sign', color: '#8d7cf7', soft: '#eeebff' },
+          Transfer: { icon: 'repeat-2', color: '#4f8cff', soft: '#e9f1ff' }
+        };
+
+        const seedAccounts = [
+          { id: 'cash', name: 'Cash', type: 'Cash', kind: 'asset', openingBalance: 460, icon: 'banknote', color: '#2aa883' },
+          { id: 'maybank', name: 'Maybank', type: 'Bank account', kind: 'asset', openingBalance: 9480, icon: 'landmark', color: '#d39b28' },
+          { id: 'tng', name: "Touch 'n Go", type: 'E-wallet', kind: 'asset', openingBalance: 268, icon: 'smartphone', color: '#4f8cff' },
+          { id: 'savings', name: 'Emergency Fund', type: 'Savings', kind: 'asset', openingBalance: 18000, icon: 'piggy-bank', color: '#8d7cf7' },
+          { id: 'credit', name: 'Credit Card', type: 'Credit card', kind: 'liability', openingBalance: 1320, icon: 'credit-card', color: '#ef7b66' }
+        ];
+
+        const seedBudgets = [
+          { category: 'Food', limit: 900 },
+          { category: 'Transport', limit: 450 },
+          { category: 'Shopping', limit: 400 },
+          { category: 'Bills', limit: 850 },
+          { category: 'Entertainment', limit: 250 },
+          { category: 'Health', limit: 200 },
+          { category: 'Education', limit: 300 },
+          { category: 'Others', limit: 350 }
+        ];
+
+        const seedTransactions = [
+          { id: 101, type: 'income', amount: 5200, accountId: 'maybank', category: 'Salary', merchant: 'Monthly salary', note: '', date: '2026-07-01' },
+          { id: 102, type: 'income', amount: 850, accountId: 'maybank', category: 'Freelance', merchant: 'Website maintenance', note: 'Client retainer', date: '2026-07-04' },
+          { id: 103, type: 'expense', amount: 128.6, accountId: 'maybank', category: 'Bills', merchant: 'Unifi', note: 'Home internet', date: '2026-07-03' },
+          { id: 104, type: 'expense', amount: 26.8, accountId: 'tng', category: 'Food', merchant: 'Village Park', note: 'Lunch', date: '2026-07-05' },
+          { id: 105, type: 'expense', amount: 62.4, accountId: 'maybank', category: 'Transport', merchant: 'Petronas', note: 'Fuel', date: '2026-07-06' },
+          { id: 106, type: 'expense', amount: 238.9, accountId: 'credit', category: 'Shopping', merchant: 'Shopee', note: 'Home supplies', date: '2026-07-08' },
+          { id: 107, type: 'expense', amount: 15.9, accountId: 'tng', category: 'Food', merchant: 'Tealive', note: '', date: '2026-07-09' },
+          { id: 108, type: 'expense', amount: 94.3, accountId: 'cash', category: 'Food', merchant: 'Jaya Grocer', note: 'Groceries', date: '2026-07-11' },
+          { id: 109, type: 'expense', amount: 139, accountId: 'credit', category: 'Entertainment', merchant: 'Netflix + Spotify', note: 'Subscriptions', date: '2026-07-12' },
+          { id: 110, type: 'expense', amount: 68, accountId: 'maybank', category: 'Health', merchant: 'Guardian', note: 'Pharmacy', date: '2026-07-14' },
+          { id: 111, type: 'expense', amount: 320, accountId: 'maybank', category: 'Bills', merchant: 'Electricity & water', note: '', date: '2026-07-15' },
+          { id: 112, type: 'expense', amount: 45.5, accountId: 'tng', category: 'Transport', merchant: 'Grab', note: 'Client meeting', date: '2026-07-17' },
+          { id: 113, type: 'expense', amount: 36.2, accountId: 'cash', category: 'Food', merchant: 'Nasi kandar', note: 'Dinner', date: '2026-07-18' },
+          { id: 114, type: 'expense', amount: 120, accountId: 'maybank', category: 'Education', merchant: 'Online course', note: '', date: '2026-07-19' },
+          { id: 115, type: 'expense', amount: 72.8, accountId: 'credit', category: 'Others', merchant: 'Mr DIY', note: '', date: '2026-07-20' },
+          { id: 116, type: 'transfer', amount: 500, accountId: 'maybank', toAccountId: 'savings', category: 'Transfer', merchant: 'Monthly saving', note: '', date: '2026-07-20' },
+          { id: 90, type: 'income', amount: 5100, accountId: 'maybank', category: 'Salary', merchant: 'Monthly salary', note: '', date: '2026-06-01' },
+          { id: 91, type: 'expense', amount: 2870, accountId: 'maybank', category: 'Others', merchant: 'June expenses', note: '', date: '2026-06-25' },
+          { id: 80, type: 'income', amount: 4900, accountId: 'maybank', category: 'Salary', merchant: 'Monthly salary', note: '', date: '2026-05-01' },
+          { id: 81, type: 'expense', amount: 3010, accountId: 'maybank', category: 'Others', merchant: 'May expenses', note: '', date: '2026-05-25' },
+          { id: 70, type: 'income', amount: 5400, accountId: 'maybank', category: 'Salary', merchant: 'Monthly salary', note: '', date: '2026-04-01' },
+          { id: 71, type: 'expense', amount: 2780, accountId: 'maybank', category: 'Others', merchant: 'April expenses', note: '', date: '2026-04-25' },
+          { id: 60, type: 'income', amount: 5000, accountId: 'maybank', category: 'Salary', merchant: 'Monthly salary', note: '', date: '2026-03-01' },
+          { id: 61, type: 'expense', amount: 3200, accountId: 'maybank', category: 'Others', merchant: 'March expenses', note: '', date: '2026-03-25' },
+          { id: 50, type: 'income', amount: 4750, accountId: 'maybank', category: 'Salary', merchant: 'Monthly salary', note: '', date: '2026-02-01' },
+          { id: 51, type: 'expense', amount: 2950, accountId: 'maybank', category: 'Others', merchant: 'February expenses', note: '', date: '2026-02-25' }
+        ];
+
+        const saved = (() => {
+          try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
+        })();
+
+        const activePage = ref('dashboard');
+        const transactions = ref(saved?.transactions || seedTransactions);
+        const accounts = ref(seedAccounts);
+        const budgets = ref(seedBudgets);
+        const currency = ref(saved?.currency || 'MYR');
+        const darkMode = ref(saved?.darkMode || false);
+        const showQuickAdd = ref(false);
+        const searchQuery = ref('');
+        const typeFilter = ref('all');
+        const accountFilter = ref('all');
+        const chartRange = ref('6');
+        const toast = ref('');
+        const formError = ref('');
+        let toastTimer = null;
+        let cashFlowChart = null;
+        let categoryChart = null;
+        let reportTrendChart = null;
+
+        const todayString = '2026-07-21';
+        const blankForm = () => ({ type: 'expense', amount: null, accountId: 'maybank', toAccountId: 'savings', category: 'Food', merchant: '', note: '', date: todayString });
+        const form = reactive(blankForm());
+
+        const expenseCategories = ['Food','Transport','Shopping','Bills','Entertainment','Health','Education','Others'];
+        const incomeCategories = ['Salary','Freelance','Other Income'];
+        const availableCategories = computed(() => form.type === 'income' ? incomeCategories : expenseCategories);
+        const currencySymbol = computed(() => currency.value === 'USD' ? '$' : currency.value === 'SGD' ? 'S$' : 'RM');
+        const pageTitle = computed(() => navigation.find(n => n.id === activePage.value)?.label || 'Overview');
+        const greeting = computed(() => new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening');
+        const currentDateLabel = computed(() => 'Tuesday, 21 July 2026');
+        const monthTransactions = computed(() => transactions.value.filter(t => {
+          const d = new Date(t.date + 'T00:00:00');
+          return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+        }));
+        const monthlyIncome = computed(() => monthTransactions.value.filter(t => t.type === 'income').reduce((sum,t) => sum + Number(t.amount), 0));
+        const monthlyExpense = computed(() => monthTransactions.value.filter(t => t.type === 'expense').reduce((sum,t) => sum + Number(t.amount), 0));
+        const totalBudget = computed(() => budgets.value.reduce((sum,b) => sum + b.limit, 0));
+        const budgetUsagePercent = computed(() => Math.round(monthlyExpense.value / Math.max(totalBudget.value,1) * 100));
+        const sortedTransactions = computed(() => [...transactions.value].sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id));
+
+        function accountBalance(account) {
+          let balance = Number(account.openingBalance);
+          transactions.value.forEach(t => {
+            const amount = Number(t.amount);
+            if (t.type === 'transfer') {
+              if (t.accountId === account.id) balance -= amount;
+              if (t.toAccountId === account.id) balance += amount;
+              return;
+            }
+            if (t.accountId !== account.id) return;
+            if (account.kind === 'liability') {
+              if (t.type === 'expense') balance += amount;
+              if (t.type === 'income') balance -= amount;
+            } else {
+              if (t.type === 'income') balance += amount;
+              if (t.type === 'expense') balance -= amount;
+            }
+          });
+          return balance;
+        }
+
+        function accountMonthChange(account) {
+          let change = 0;
+          monthTransactions.value.forEach(t => {
+            const amount = Number(t.amount);
+            if (t.type === 'transfer') {
+              if (t.accountId === account.id) change -= amount;
+              if (t.toAccountId === account.id) change += amount;
+              return;
+            }
+            if (t.accountId !== account.id) return;
+            if (account.kind === 'liability') change += t.type === 'expense' ? amount : -amount;
+            else change += t.type === 'income' ? amount : -amount;
+          });
+          return change;
+        }
+
+        const accountDetails = computed(() => accounts.value.map(a => ({...a, balance: accountBalance(a), monthChange: accountMonthChange(a)})));
+        const totalAssets = computed(() => accountDetails.value.filter(a => a.kind === 'asset').reduce((sum,a) => sum + a.balance,0));
+        const totalLiabilities = computed(() => accountDetails.value.filter(a => a.kind === 'liability').reduce((sum,a) => sum + a.balance,0));
+        const netWorth = computed(() => totalAssets.value - totalLiabilities.value);
+        const totalBalance = computed(() => netWorth.value);
+        const cashRatio = computed(() => Math.max(0, Math.min(100, Math.round(accountDetails.value.filter(a => ['Cash','Bank account','E-wallet'].includes(a.type)).reduce((s,a)=>s+a.balance,0) / Math.max(totalAssets.value,1) * 100))));
+
+        function categoryAmount(category) {
+          return monthTransactions.value.filter(t => t.type === 'expense' && t.category === category).reduce((sum,t)=>sum+Number(t.amount),0);
+        }
+        const budgetDetails = computed(() => budgets.value.map(b => {
+          const spent = categoryAmount(b.category);
+          const meta = categoryMeta[b.category] || categoryMeta.Others;
+          return {...b, spent, percent: Math.round(spent/Math.max(b.limit,1)*100), transactionCount: monthTransactions.value.filter(t=>t.type==='expense'&&t.category===b.category).length, color:meta.color};
+        }));
+        const healthyBudgetCount = computed(() => budgetDetails.value.filter(b=>b.percent<=100).length);
+        const overBudgetCount = computed(() => budgetDetails.value.filter(b=>b.percent>100).length);
+        const topCategories = computed(() => expenseCategories.map(name => {
+          const meta = categoryMeta[name] || categoryMeta.Others;
+          const relevant = monthTransactions.value.filter(t=>t.type==='expense'&&t.category===name);
+          return {name, amount: relevant.reduce((s,t)=>s+Number(t.amount),0), count: relevant.length, ...meta};
+        }).filter(i=>i.amount>0).sort((a,b)=>b.amount-a.amount));
+        const savingsRate = computed(() => monthlyIncome.value ? Math.round((monthlyIncome.value-monthlyExpense.value)/monthlyIncome.value*100) : 0);
+
+        const filteredTransactions = computed(() => sortedTransactions.value.filter(t => {
+          const search = searchQuery.value.trim().toLowerCase();
+          const searchable = `${t.merchant} ${t.category} ${t.note || ''} ${accountName(t.accountId)}`.toLowerCase();
+          return (!search || searchable.includes(search)) && (typeFilter.value==='all'||t.type===typeFilter.value) && (accountFilter.value==='all'||t.accountId===accountFilter.value||t.toAccountId===accountFilter.value);
+        }));
+        const filteredExpense = computed(() => filteredTransactions.value.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0));
+        const filteredIncome = computed(() => filteredTransactions.value.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0));
+
+        function money(value) {
+          return new Intl.NumberFormat(currency.value === 'MYR' ? 'en-MY' : 'en-US', { style: 'currency', currency: currency.value, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0);
+        }
+        function shortDate(date) { return new Intl.DateTimeFormat('en-MY',{day:'numeric',month:'short'}).format(new Date(date+'T00:00:00')); }
+        function fullDate(date) { return new Intl.DateTimeFormat('en-MY',{day:'numeric',month:'short',year:'numeric'}).format(new Date(date+'T00:00:00')); }
+        function accountName(id) { return accounts.value.find(a=>a.id===id)?.name || 'Unknown'; }
+        function categoryIcon(category) { return (categoryMeta[category] || categoryMeta.Others).icon; }
+        function categoryStyle(category) { const m=categoryMeta[category]||categoryMeta.Others; return {background:m.soft,color:m.color}; }
+
+        function setDefaultCategory() {
+          form.category = form.type === 'income' ? 'Salary' : form.type === 'expense' ? 'Food' : 'Transfer';
+          if (form.type === 'transfer' && form.toAccountId === form.accountId) {
+            form.toAccountId = accounts.value.find(a=>a.id!==form.accountId)?.id || '';
+          }
+        }
+        function openQuickAdd(type='expense') {
+          Object.assign(form, blankForm(), {type});
+          setDefaultCategory();
+          formError.value='';
+          showQuickAdd.value=true;
+          nextTick(refreshIcons);
+        }
+        function closeQuickAdd() { showQuickAdd.value=false; formError.value=''; }
+        function submitTransaction() {
+          if (!form.amount || Number(form.amount) <= 0) { formError.value='Enter an amount greater than zero.'; return; }
+          if (!form.accountId) { formError.value='Choose an account.'; return; }
+          if (form.type==='transfer' && (!form.toAccountId || form.toAccountId===form.accountId)) { formError.value='Choose a different destination account.'; return; }
+          transactions.value.push({
+            id: Date.now(), type: form.type, amount: Number(form.amount), accountId: form.accountId,
+            toAccountId: form.type==='transfer' ? form.toAccountId : undefined,
+            category: form.type==='transfer' ? 'Transfer' : form.category,
+            merchant: form.merchant || (form.type==='income'?'Income':form.type==='transfer'?'Account transfer':'Expense'),
+            note: form.note, date: form.date
+          });
+          closeQuickAdd();
+          showToast('Transaction saved');
+          scheduleCharts();
+        }
+        function deleteTransaction(id) {
+          if (!confirm('Delete this transaction?')) return;
+          transactions.value = transactions.value.filter(t=>t.id!==id);
+          showToast('Transaction deleted');
+          scheduleCharts();
+        }
+        function navigate(page) {
+          activePage.value=page;
+          window.scrollTo({top:0,behavior:'smooth'});
+          scheduleCharts();
+        }
+        function showToast(message) {
+          toast.value=message;
+          clearTimeout(toastTimer);
+          toastTimer=setTimeout(()=>toast.value='',2200);
+          nextTick(refreshIcons);
+        }
+        function resetDemo() {
+          if (!confirm('Reset all prototype changes and restore sample data?')) return;
+          transactions.value = JSON.parse(JSON.stringify(seedTransactions));
+          currency.value='MYR'; darkMode.value=false;
+          localStorage.removeItem(STORAGE_KEY);
+          showToast('Sample data restored');
+          scheduleCharts();
+        }
+        function exportCsv() {
+          const header=['Date','Type','Merchant','Category','Account','To Account','Amount','Note'];
+          const rows=sortedTransactions.value.map(t=>[t.date,t.type,t.merchant,t.category,accountName(t.accountId),t.toAccountId?accountName(t.toAccountId):'',Number(t.amount).toFixed(2),t.note||'']);
+          const csv=[header,...rows].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(',')).join('\n');
+          const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement('a'); a.href=url; a.download='clarity-transactions.csv'; a.click(); URL.revokeObjectURL(url);
+          showToast('CSV exported');
+        }
+
+        function monthlySeries() {
+          const months=[];
+          for (let offset=5; offset>=0; offset--) {
+            const d=new Date(currentYear,currentMonth-offset,1);
+            const month=d.getMonth(), year=d.getFullYear();
+            const tx=transactions.value.filter(t=>{const td=new Date(t.date+'T00:00:00');return td.getMonth()===month&&td.getFullYear()===year;});
+            months.push({label:new Intl.DateTimeFormat('en',{month:'short'}).format(d), income:tx.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0), expense:tx.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0)});
+          }
+          return chartRange.value==='3' ? months.slice(-3) : months;
+        }
+        function chartTextColor() { return darkMode.value ? '#9aa69f' : '#78827a'; }
+        function chartGridColor() { return darkMode.value ? 'rgba(154,166,159,.12)' : 'rgba(120,130,122,.12)'; }
+        function destroyChart(chart) { if (chart) chart.destroy(); }
+        function renderCharts() {
+          if (!window.Chart) return;
+          const series=monthlySeries();
+          const cashCtx=document.getElementById('cashFlowChart');
+          if (cashCtx) {
+            destroyChart(cashFlowChart);
+            cashFlowChart=new Chart(cashCtx,{type:'line',data:{labels:series.map(x=>x.label),datasets:[
+              {label:'Income',data:series.map(x=>x.income),borderColor:'#2aa883',backgroundColor:'rgba(42,168,131,.10)',fill:true,tension:.42,borderWidth:2.5,pointRadius:0,pointHoverRadius:5},
+              {label:'Expense',data:series.map(x=>x.expense),borderColor:'#ef7b66',backgroundColor:'rgba(239,123,102,.05)',fill:true,tension:.42,borderWidth:2.5,pointRadius:0,pointHoverRadius:5}
+            ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',align:'end',labels:{usePointStyle:true,pointStyle:'circle',boxWidth:7,boxHeight:7,color:chartTextColor(),font:{size:11}}},tooltip:{backgroundColor:'#17211b',padding:12,cornerRadius:12,callbacks:{label:c=>`${c.dataset.label}: ${money(c.raw)}`}}},scales:{x:{grid:{display:false},border:{display:false},ticks:{color:chartTextColor(),font:{size:11}}},y:{grid:{color:chartGridColor()},border:{display:false},ticks:{color:chartTextColor(),font:{size:11},callback:v=>currencySymbol.value+(v/1000).toFixed(v>=1000?1:0)+'k'}}}}});
+          }
+          const trendCtx=document.getElementById('reportTrendChart');
+          if (trendCtx) {
+            destroyChart(reportTrendChart);
+            reportTrendChart=new Chart(trendCtx,{type:'bar',data:{labels:series.map(x=>x.label),datasets:[
+              {label:'Income',data:series.map(x=>x.income),backgroundColor:'#2a6a55',borderRadius:8,borderSkipped:false},
+              {label:'Expense',data:series.map(x=>x.expense),backgroundColor:'#ff9a88',borderRadius:8,borderSkipped:false}
+            ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{usePointStyle:true,pointStyle:'circle',boxWidth:7,color:chartTextColor(),font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${money(c.raw)}`}}},scales:{x:{grid:{display:false},border:{display:false},ticks:{color:chartTextColor()}},y:{grid:{color:chartGridColor()},border:{display:false},ticks:{color:chartTextColor(),callback:v=>currencySymbol.value+(v/1000)+'k'}}}}});
+          }
+          const categoryCtx=document.getElementById('categoryChart');
+          if (categoryCtx) {
+            destroyChart(categoryChart);
+            const items=topCategories.value;
+            categoryChart=new Chart(categoryCtx,{type:'doughnut',data:{labels:items.map(x=>x.name),datasets:[{data:items.map(x=>x.amount),backgroundColor:items.map(x=>x.color),borderWidth:0,hoverOffset:5}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',boxWidth:7,padding:16,color:chartTextColor(),font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.label}: ${money(c.raw)}`}}}}});
+          }
+        }
+        function refreshIcons() { if (window.lucide) window.lucide.createIcons({attrs:{'stroke-width':1.8}}); }
+        function scheduleCharts() { nextTick(()=>setTimeout(()=>{refreshIcons();renderCharts();},25)); }
+
+        watch([transactions,currency,darkMode],()=>{
+          localStorage.setItem(STORAGE_KEY,JSON.stringify({transactions:transactions.value,currency:currency.value,darkMode:darkMode.value}));
+          scheduleCharts();
+        },{deep:true});
+        watch(activePage,scheduleCharts);
+
+        onMounted(()=>{ refreshIcons(); renderCharts(); });
+
+        return {
+          navigation,mobileNavigation,activePage,pageTitle,currentDateLabel,greeting,transactions,accounts,budgets,currency,darkMode,currencySymbol,
+          showQuickAdd,searchQuery,typeFilter,accountFilter,chartRange,toast,form,formError,availableCategories,
+          monthlyIncome,monthlyExpense,totalBudget,budgetUsagePercent,totalBalance,sortedTransactions,topCategories,
+          filteredTransactions,filteredExpense,filteredIncome,budgetDetails,healthyBudgetCount,overBudgetCount,
+          accountDetails,totalAssets,totalLiabilities,netWorth,cashRatio,savingsRate,
+          money,shortDate,fullDate,accountName,categoryIcon,categoryStyle,setDefaultCategory,
+          openQuickAdd,closeQuickAdd,submitTransaction,deleteTransaction,navigate,resetDemo,exportCsv,scheduleCharts
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
