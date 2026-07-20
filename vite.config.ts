@@ -5,5 +5,4 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   base: '/vipro-pocket/',
   plugins: [vue(), tailwindcss()],
-  test: { environment: 'node' },
 })
