@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
     "chart.js": "^4.5.1",
     "dexie": "^4.0.11",
     "lucide-vue-next": "^0.468.0",
