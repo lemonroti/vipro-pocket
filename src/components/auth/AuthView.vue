@@ -22,7 +22,7 @@ const title = computed(() => ({ login: 'Welcome back', signup: 'Create your acco
 watch(mode, () => {
   auth.clearError()
   message.value = ''
-}, { immediate: true })
+})
 
 function preventPendingNavigation(event: MouseEvent) {
   if (auth.pending) event.preventDefault()

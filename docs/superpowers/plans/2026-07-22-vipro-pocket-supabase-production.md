@@ -251,24 +251,32 @@ Completed:
 - Uses maintained official action majors and bounded job timeouts
 - Reads and validates the production Supabase URL and publishable key from GitHub repository variables
 - Configured the Supabase Auth Site URL for GitHub Pages
+- Configured the exact GitHub Pages password-recovery hash redirect
+- Disabled email confirmation for this private single-user beta so signup immediately returns a session
+- Confirmed the hardened frontend and GitHub-hosted Docker/pgTAP jobs pass
 
 Required:
 
-- Confirm the updated workflow passes in GitHub Actions
-- Configure the Supabase password-recovery redirect URL
 - Configure production SMTP for password recovery
 
 ### Task 12 — Production verification and release
 
-Status: Not started
+Status: In progress (code and local production-build journeys verified; live Pages release and SMTP recovery remain)
+
+Completed:
+
+- Full frontend suite passes (105 tests) and the production build/type-check passes
+- Security Advisor reports no findings; Performance Advisor reports only expected unused-index informational notices on the new low-traffic database
+- Two independently signed-up live Supabase users see isolated finance data
+- Production build browser journeys pass for signup, login, logout, refresh persistence, accounts, categories, expense/income/transfer transactions, budgets, CSV export, currency, charts, and invalid recovery-link guidance
+- Desktop Chromium and an Android-sized 390 x 844 responsive viewport render without console errors during the verified journeys
+- Fixed a production-only blank root caused by a runtime template and split route bundles below Vite's warning threshold
+- Fixed stale authentication feedback leaking between login, signup, and recovery forms
 
 Required:
 
-- Run automated tests and production build
-- Re-run Supabase Security and Performance Advisors
-- Test two separate users for RLS isolation
-- Test desktop Chrome and Android Chrome
-- Test signup, login, logout, recovery, accounts, transactions, transfers, budgets, CSV, currency, charts, and refresh behavior
+- Configure and verify production SMTP plus the delivered password-recovery link
+- Verify the merged GitHub Pages deployment on desktop Chrome and an Android device/Chrome emulation
 - Review PR #5
 - Merge only after all checks pass
 

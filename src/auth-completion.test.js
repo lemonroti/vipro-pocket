@@ -48,5 +48,6 @@ describe('Task 5 production auth wiring', () => {
   it('clears stale feedback when moving between authentication forms', () => {
     expect(authView).toContain('watch(mode')
     expect(authView).toContain('auth.clearError()')
+    expect(authView).not.toContain('{ immediate: true }')
   })
 })
