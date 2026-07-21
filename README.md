@@ -53,6 +53,8 @@ Expected URL:
 https://lemonroti.github.io/vipro-pocket/
 ```
 
+Production configuration, SMTP, release, verification, and rollback procedures are documented in [`docs/production-operations.md`](docs/production-operations.md).
+
 ## Prototype archive
 
 The original single-file prototype remains available at:

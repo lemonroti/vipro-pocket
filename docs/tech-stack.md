@@ -115,7 +115,6 @@ Frontend Hosting       GitHub Pages
 
 ## Deferred work
 
-- Transaction editing and category creation
-- Budget copy workflows
+- Public registration with email-confirmation-pending UX
 - Installable PWA and offline support
 - Native Android/iOS packaging and widgets
