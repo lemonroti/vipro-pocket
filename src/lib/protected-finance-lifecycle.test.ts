@@ -101,7 +101,7 @@ describe('protected finance lifecycle', () => {
     await Promise.resolve()
 
     expect(load).not.toHaveBeenCalled()
-    expect(dispose).toHaveBeenCalled()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 
   it('can restart safely while a stopped initialization is still settling', async () => {
@@ -133,8 +133,9 @@ describe('protected finance lifecycle', () => {
       .mockRejectedValueOnce(new Error('private auth endpoint detail'))
       .mockResolvedValueOnce(undefined)
     const load = vi.fn().mockResolvedValue(undefined)
+    const dispose = vi.fn()
     const lifecycle = createProtectedFinanceLifecycle({
-      auth: { initialize, dispose: vi.fn() },
+      auth: { initialize, dispose },
       finance: { userId: null, initialized: false, load, reset: vi.fn() },
       getUserId: () => 'user-1',
       redirectToLogin: vi.fn(),
@@ -142,6 +143,7 @@ describe('protected finance lifecycle', () => {
 
     await expect(lifecycle.start()).resolves.toBeUndefined()
     expect(lifecycle.bootstrapError.value).toBe('Unable to initialize your session. Please try again.')
+    expect(dispose).not.toHaveBeenCalled()
     await lifecycle.retry()
 
     expect(initialize).toHaveBeenCalledTimes(2)

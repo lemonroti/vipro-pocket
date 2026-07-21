@@ -15,25 +15,51 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref('')
   const recoveryMode = ref(false)
   let unsubscribe: (() => void) | null = null
+  let initialization: Promise<void> | null = null
+  let initializationGeneration = -1
+  let generation = 0
 
   const user = computed<User | null>(() => session.value?.user ?? null)
 
-  async function initialize() {
-    if (initialized.value) return
+  function initialize(): Promise<void> {
+    if (initialized.value) return Promise.resolve()
+    if (initialization && initializationGeneration === generation) return initialization
 
-    const { data, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError) error.value = sessionError.message
-    session.value = data.session
-    if (!data.session) finance.reset()
+    const ownerGeneration = generation
+    initializationGeneration = ownerGeneration
+    let request!: Promise<void>
+    request = (async () => {
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      if (ownerGeneration !== generation) return
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      session.value = nextSession
-      if (!nextSession) finance.reset()
-      recoveryMode.value = event === 'PASSWORD_RECOVERY'
+      if (sessionError) error.value = sessionError.message
+      session.value = data.session
+      if (!data.session) finance.reset()
+
+      let ownsSubscription = false
+      const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+        if (!ownsSubscription || ownerGeneration !== generation) return
+        session.value = nextSession
+        if (!nextSession) finance.reset()
+        recoveryMode.value = event === 'PASSWORD_RECOVERY'
+      })
+      const release = () => listener.subscription.unsubscribe()
+      if (ownerGeneration !== generation) {
+        release()
+        return
+      }
+
+      ownsSubscription = true
+      unsubscribe = () => {
+        ownsSubscription = false
+        release()
+      }
+      initialized.value = true
+    })().finally(() => {
+      if (initialization === request) initialization = null
     })
-
-    unsubscribe = () => listener.subscription.unsubscribe()
-    initialized.value = true
+    initialization = request
+    return request
   }
 
   function validatePassword(password: string) {
@@ -106,6 +132,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function dispose() {
+    generation += 1
     unsubscribe?.()
     unsubscribe = null
     initialized.value = false

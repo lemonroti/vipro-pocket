@@ -2,13 +2,23 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const authBoundary = vi.hoisted(() => {
-  let callback: ((event: string, session: unknown) => void) | undefined
+  const listeners: Array<{ active: boolean, callback: (event: string, session: unknown) => void, unsubscribe: ReturnType<typeof vi.fn> }> = []
   return {
-    setCallback(next: (event: string, session: unknown) => void) { callback = next },
-    emit(event: string, session: unknown) { callback?.(event, session) },
+    reset() { listeners.length = 0 },
+    subscribe(callback: (event: string, session: unknown) => void) {
+      const listener = { active: true, callback, unsubscribe: vi.fn() }
+      listener.unsubscribe.mockImplementation(() => { listener.active = false })
+      listeners.push(listener)
+      return { data: { subscription: { unsubscribe: listener.unsubscribe } } }
+    },
+    emit(event: string, session: unknown) {
+      listeners.filter(({ active }) => active).forEach(({ callback }) => callback(event, session))
+    },
+    emitAt(index: number, event: string, session: unknown) { listeners[index]?.callback(event, session) },
+    activeListenerCount() { return listeners.filter(({ active }) => active).length },
+    unsubscribeCallCount() { return listeners.reduce((count, listener) => count + listener.unsubscribe.mock.calls.length, 0) },
     getSession: vi.fn(),
     signOut: vi.fn(),
-    unsubscribe: vi.fn(),
   }
 })
 
@@ -16,10 +26,7 @@ vi.mock('../lib/supabase', () => ({
   supabase: {
     auth: {
       getSession: authBoundary.getSession,
-      onAuthStateChange: (callback: (event: string, session: unknown) => void) => {
-        authBoundary.setCallback(callback)
-        return { data: { subscription: { unsubscribe: authBoundary.unsubscribe } } }
-      },
+      onAuthStateChange: authBoundary.subscribe,
       signOut: authBoundary.signOut,
     },
   },
@@ -45,6 +52,7 @@ describe('auth finance lifecycle', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    authBoundary.reset()
     authBoundary.getSession.mockResolvedValue({ data: { session }, error: null })
     authBoundary.signOut.mockResolvedValue({ error: null })
   })
@@ -81,6 +89,58 @@ describe('auth finance lifecycle', () => {
     await auth.initialize()
 
     expect(authBoundary.getSession).toHaveBeenCalledTimes(2)
-    expect(authBoundary.unsubscribe).toHaveBeenCalledOnce()
+    expect(authBoundary.unsubscribeCallCount()).toBe(1)
+  })
+
+  it('shares one initialization request and subscription across concurrent callers', async () => {
+    let resolveSession!: (result: { data: { session: typeof session }, error: null }) => void
+    authBoundary.getSession.mockReturnValue(new Promise((resolve) => { resolveSession = resolve }))
+    const auth = useAuthStore()
+
+    const first = auth.initialize()
+    const second = auth.initialize()
+    expect(authBoundary.getSession).toHaveBeenCalledOnce()
+    resolveSession({ data: { session }, error: null })
+    await Promise.all([first, second])
+
+    expect(auth.initialized).toBe(true)
+    expect(authBoundary.activeListenerCount()).toBe(1)
+  })
+
+  it('keeps a newer initialization active when a disposed older request resolves late', async () => {
+    let resolveOld!: (result: { data: { session: typeof session }, error: null }) => void
+    let resolveNew!: (result: { data: { session: typeof session }, error: null }) => void
+    authBoundary.getSession
+      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveNew = resolve }))
+    const auth = useAuthStore()
+
+    const oldInitialization = auth.initialize()
+    auth.dispose()
+    const newInitialization = auth.initialize()
+    expect(authBoundary.getSession).toHaveBeenCalledTimes(2)
+
+    resolveNew({ data: { session: { user: { id: 'new-user' } } }, error: null })
+    await newInitialization
+    resolveOld({ data: { session: { user: { id: 'old-user' } } }, error: null })
+    await oldInitialization
+
+    expect(auth.initialized).toBe(true)
+    expect(auth.user?.id).toBe('new-user')
+    expect(authBoundary.activeListenerCount()).toBe(1)
+  })
+
+  it('ignores auth events from a listener that no longer owns the store', async () => {
+    const auth = useAuthStore()
+    await auth.initialize()
+    auth.dispose()
+    authBoundary.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'new-user' } } }, error: null })
+    await auth.initialize()
+
+    authBoundary.emitAt(0, 'SIGNED_OUT', null)
+
+    expect(auth.initialized).toBe(true)
+    expect(auth.user?.id).toBe('new-user')
+    expect(authBoundary.activeListenerCount()).toBe(1)
   })
 })

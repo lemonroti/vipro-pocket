@@ -81,15 +81,11 @@ export function createProtectedFinanceLifecycle(options: ProtectedFinanceLifecyc
       try {
         await options.auth.initialize()
       } catch {
-        options.auth.dispose()
         if (generation === lifecycleGeneration) bootstrapError.value = BOOTSTRAP_ERROR
         return
       }
 
-      if (generation !== lifecycleGeneration) {
-        options.auth.dispose()
-        return
-      }
+      if (generation !== lifecycleGeneration) return
       stopWatching = watch(options.getUserId, synchronize, { immediate: true })
     })().finally(() => {
       if (startPromise === request) startPromise = null

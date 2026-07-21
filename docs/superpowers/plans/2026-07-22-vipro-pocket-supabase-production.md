@@ -161,7 +161,7 @@ Remaining:
 
 ### Task 6 — Authenticated Pocket state store
 
-Status: Complete (2026-07-22; 37 tests passing and production build verified)
+Status: Complete (2026-07-22; 40 tests passing and production build verified)
 
 Required:
 
