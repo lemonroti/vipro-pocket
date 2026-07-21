@@ -13,7 +13,7 @@ describe('Task 7 finance UI migration', () => {
     expect(dashboard).toContain('class="app-shell"')
     expect(app).toContain('createProtectedFinanceLifecycle')
     expect(app).toContain('<FinanceDashboard')
-    expect(main).toContain("{ path: '/', component: App }")
+    expect(main).toContain("{ path: '/', component: () => import('./App.vue') }")
     expect(main).not.toContain('ProtectedApp')
   })
 

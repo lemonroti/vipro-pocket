@@ -1,9 +1,6 @@
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
-import App from './App.vue'
-import AuthView from './components/auth/AuthView.vue'
-import UpdatePasswordView from './components/auth/UpdatePasswordView.vue'
 import { useAuthStore } from './stores/auth'
 import './style.css'
 import './sidebar-nav.css'
@@ -14,11 +11,11 @@ import './monthly-budget-management.css'
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', component: App },
-    { path: '/login', component: AuthView },
-    { path: '/signup', component: AuthView },
-    { path: '/forgot-password', component: AuthView },
-    { path: '/update-password', component: UpdatePasswordView },
+    { path: '/', component: () => import('./App.vue') },
+    { path: '/login', component: () => import('./components/auth/AuthView.vue') },
+    { path: '/signup', component: () => import('./components/auth/AuthView.vue') },
+    { path: '/forgot-password', component: () => import('./components/auth/AuthView.vue') },
+    { path: '/update-password', component: () => import('./components/auth/UpdatePasswordView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

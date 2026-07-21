@@ -22,6 +22,13 @@ describe('Task 5 production auth wiring', () => {
     expect(main).toContain('auth.initialize()')
   })
 
+  it('lazy-loads route views so the production entry bundle stays small', () => {
+    expect(main).toContain("component: () => import('./App.vue')")
+    expect(main).toContain("component: () => import('./components/auth/AuthView.vue')")
+    expect(main).toContain("component: () => import('./components/auth/UpdatePasswordView.vue')")
+    expect(main).not.toContain("import App from './App.vue'")
+  })
+
   it('shows recovery loading and expired-link guidance before rendering the password form', () => {
     expect(updatePassword).toContain('await auth.initialize()')
     expect(updatePassword).toContain('Processing your recovery link…')
