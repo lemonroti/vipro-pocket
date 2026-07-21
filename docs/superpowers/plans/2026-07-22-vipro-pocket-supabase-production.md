@@ -140,7 +140,7 @@ Verified:
 
 ### Task 5 — Authentication
 
-Status: Partially implemented
+Status: Complete locally (2026-07-22; production redirect/SMTP journey remains in Tasks 11–12)
 
 Completed:
 
@@ -151,13 +151,19 @@ Completed:
 - Protected application wrapper
 - Supabase session store
 - Hash routes for auth pages
+- Added a visible, accessible Settings sign-out action with pending protection and safe rejected-signout feedback
+- Preserved the authenticated session and finance state when sign-out is rejected; successful sign-out clears finance state and returns to login through the protected lifecycle
+- Added auth mutation single-flight protection across signup, sign-in, sign-out, reset request, and password update
+- Initialized auth eagerly and made recovery event handling reliable before, during, immediately after, and after store initialization
+- Gated password updates on an authenticated recovery session, with URL-processing loading state and expired-link guidance
+- Kept password length/confirmation validation and disabled submission/navigation controls during pending auth work
 
-Remaining:
+Verified locally:
 
-- Verify signup configuration and immediate session behavior
-- Verify password recovery end to end
-- Add or complete automated auth tests
-- Configure production Auth redirect URLs
+- Focused auth store and UI wiring tests pass (17 tests)
+- Full frontend suite passes (95 tests)
+- TypeScript checking and production build pass
+- No live password-reset email was sent locally; configured redirects, SMTP, immediate signup behavior, and the end-to-end recovery journey remain production checks in Tasks 11–12
 
 ### Task 6 — Authenticated Pocket state store
 

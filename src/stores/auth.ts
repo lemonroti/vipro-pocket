@@ -6,6 +6,9 @@ import { supabase } from '../lib/supabase'
 import { useFinanceStore } from './finance'
 
 const MIN_PASSWORD_LENGTH = 8
+const AUTH_IN_PROGRESS = 'Authentication request already in progress'
+const INVALID_RECOVERY = 'Open a valid password recovery link before choosing a new password.'
+const SIGN_OUT_FAILED = 'Unable to sign out. Please try again.'
 
 export const useAuthStore = defineStore('auth', () => {
   const finance = useFinanceStore()
@@ -18,41 +21,52 @@ export const useAuthStore = defineStore('auth', () => {
   let initialization: Promise<void> | null = null
   let initializationGeneration = -1
   let generation = 0
+  let authEventRevision = 0
+  let mutationGeneration = 0
 
   const user = computed<User | null>(() => session.value?.user ?? null)
+
+  function ensureSubscription(): void {
+    if (unsubscribe) return
+
+    const ownerGeneration = generation
+    let ownsSubscription = true
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!ownsSubscription || ownerGeneration !== generation) return
+      authEventRevision += 1
+      session.value = nextSession
+      if (!nextSession) finance.reset()
+      if (event === 'PASSWORD_RECOVERY' && nextSession) recoveryMode.value = true
+      if (event === 'SIGNED_OUT') recoveryMode.value = false
+    })
+    unsubscribe = () => {
+      ownsSubscription = false
+      listener.subscription.unsubscribe()
+    }
+  }
+
+  ensureSubscription()
 
   function initialize(): Promise<void> {
     if (initialized.value) return Promise.resolve()
     if (initialization && initializationGeneration === generation) return initialization
 
+    ensureSubscription()
     const ownerGeneration = generation
+    const startingEventRevision = authEventRevision
     initializationGeneration = ownerGeneration
     let request!: Promise<void>
     request = (async () => {
       const { data, error: sessionError } = await supabase.auth.getSession()
+      // auth-js delivers URL recovery notifications on the next task after its
+      // initialization promise settles. Keep the route loading until that event runs.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
       if (ownerGeneration !== generation) return
 
       if (sessionError) error.value = sessionError.message
-      session.value = data.session
-      if (!data.session) finance.reset()
-
-      let ownsSubscription = false
-      const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
-        if (!ownsSubscription || ownerGeneration !== generation) return
-        session.value = nextSession
-        if (!nextSession) finance.reset()
-        recoveryMode.value = event === 'PASSWORD_RECOVERY'
-      })
-      const release = () => listener.subscription.unsubscribe()
-      if (ownerGeneration !== generation) {
-        release()
-        return
-      }
-
-      ownsSubscription = true
-      unsubscribe = () => {
-        ownsSubscription = false
-        release()
+      if (authEventRevision === startingEventRevision && !recoveryMode.value) {
+        session.value = data.session
+        if (!data.session) finance.reset()
       }
       initialized.value = true
     })().finally(() => {
@@ -68,17 +82,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function run<T>(action: () => Promise<T>): Promise<T> {
+  async function run<T>(action: () => Promise<T>, safeError?: string): Promise<T> {
+    if (pending.value) throw new Error(AUTH_IN_PROGRESS)
+
+    const ownerGeneration = ++mutationGeneration
     pending.value = true
     error.value = ''
     try {
       return await action()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Authentication failed'
-      error.value = message
+      error.value = safeError ?? message
       throw cause
     } finally {
-      pending.value = false
+      if (ownerGeneration === mutationGeneration) pending.value = false
     }
   }
 
@@ -109,8 +126,9 @@ export const useAuthStore = defineStore('auth', () => {
       const { error: signOutError } = await supabase.auth.signOut()
       if (signOutError) throw signOutError
       session.value = null
+      recoveryMode.value = false
       finance.reset()
-    })
+    }, SIGN_OUT_FAILED)
   }
 
   async function requestPasswordReset(email: string) {
@@ -125,6 +143,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function updatePassword(password: string) {
     validatePassword(password)
     return run(async () => {
+      if (!initialized.value || !session.value || !recoveryMode.value) throw new Error(INVALID_RECOVERY)
       const { error: updateError } = await supabase.auth.updateUser({ password })
       if (updateError) throw updateError
       recoveryMode.value = false

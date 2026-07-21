@@ -31,6 +31,7 @@ import {
   netWorth,
 } from '../../finance'
 import { useFinanceStore } from '../../stores/finance'
+import { useAuthStore } from '../../stores/auth'
 import type { Account, Category, Transaction, TransactionType } from '../../types/finance-domain'
 import {
   accountDraftFromAccount,
@@ -61,6 +62,7 @@ import {
   type TransactionDraft,
 } from './transaction-ui'
 
+const auth = useAuthStore()
 const finance = useFinanceStore()
 const { accounts, budgets, categories, profile, transactions } = storeToRefs(finance)
 const categoryById = computed(() => new Map(categories.value.map((category) => [category.id, category])))
@@ -250,6 +252,14 @@ function openAdd(type: TransactionType) {
     transactionDate: new Date().toISOString().slice(0, 10),
   }
   modalOpen.value = true
+}
+
+async function signOut() {
+  try {
+    await auth.signOut()
+  } catch {
+    showToast(auth.error || 'Unable to sign out. Please try again.')
+  }
 }
 
 function openEditTransaction(transaction: Transaction) {
@@ -772,6 +782,7 @@ onBeforeUnmount(() => {
           <article class="card settings-card"><div><span>Appearance</span><h3>Dark mode</h3><p>Use a dark interface on this device.</p></div><button class="toggle" :class="{ on: dark }" @click="dark = !dark"><i></i></button></article>
           <article class="card settings-card"><div><span>Currency</span><h3>Display currency</h3><p>Stored amounts remain unchanged.</p></div><select :value="currency" :disabled="currencyPending" @change="updateCurrency($event.target as HTMLSelectElement)"><option>MYR</option><option>SGD</option><option>USD</option></select></article>
           <article class="card settings-card"><div><span>Data</span><h3>Export CSV</h3></div><button class="secondary" @click="exportCsv">Export</button></article>
+          <article class="card settings-card"><div><span>Session</span><h3>Sign out</h3><p>End this session and return to sign in.</p></div><button class="secondary" type="button" aria-label="Sign out of Vipro Pocket" :disabled="auth.pending" @click="signOut">{{ auth.pending ? 'Signing out…' : 'Sign out' }}</button></article>
           <article class="card category-settings">
             <div class="section-head"><div><span>Custom categories</span><h3>Income and expense labels</h3></div><button class="secondary" type="button" @click="openCategoryModal"><Plus :size="16" /> Add category</button></div>
             <p v-if="!customCategories.length" class="empty-state">No custom categories yet. Your default categories remain available.</p>

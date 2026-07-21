@@ -4,6 +4,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import AuthView from './components/auth/AuthView.vue'
 import UpdatePasswordView from './components/auth/UpdatePasswordView.vue'
+import { useAuthStore } from './stores/auth'
 import './style.css'
 import './sidebar-nav.css'
 import './account-management.css'
@@ -22,4 +23,8 @@ const router = createRouter({
   ],
 })
 
-createApp({ template: '<RouterView />' }).use(createPinia()).use(router).mount('#app')
+const pinia = createPinia()
+const auth = useAuthStore(pinia)
+void auth.initialize().catch(() => undefined)
+
+createApp({ template: '<RouterView />' }).use(pinia).use(router).mount('#app')
