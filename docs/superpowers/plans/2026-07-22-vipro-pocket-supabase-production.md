@@ -80,7 +80,7 @@ Remaining:
 
 ### Task 2 — Fresh Supabase project and schema
 
-Status: Database deployed; repository files added, CI verification pending
+Status: Database deployed; least-privilege hardening migration added, CI and hosted deployment pending
 
 Completed:
 
@@ -94,11 +94,14 @@ Completed:
 - Supabase Security Advisor is clean
 - Added missing foreign-key indexes
 - Saved the deployed migration history under `supabase/migrations/`
-- Added transaction-isolated pgTAP database tests
+- Added transaction-isolated pgTAP tests for schema, provisioning, RLS, ownership, transaction shapes, constraints, and exact table privileges
+- Added a pending migration that removes `TRUNCATE`, `REFERENCES`, and `TRIGGER` access from application roles
 
 Remaining:
 
 - Verify a clean local database start, migrations, and pgTAP tests in CI
+- Apply `20260721185038_restrict_app_table_privileges.sql` to the hosted project only after CI passes
+- Re-run Security and Performance Advisors after hosted deployment
 
 ### Task 3 — Typed Supabase browser client
 
@@ -219,6 +222,7 @@ Completed:
 - Added a pinned Supabase CLI database-test job on GitHub-hosted Docker
 - Enabled CI for pull requests to `main` and pushes to `feat/supabase-production`
 - Restricted GitHub Pages deployment to pushes on `main`
+- Scoped Pages and OIDC write permissions to the deploy job only
 
 Required:
 
