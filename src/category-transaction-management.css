@@ -1,0 +1,87 @@
+.category-settings {
+  display: grid;
+  gap: 1rem;
+}
+
+.category-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  border: 1px solid #e2e8e3;
+  border-radius: 999px;
+  padding: .45rem .7rem;
+  background: #f8faf8;
+  font-size: .8rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.category-chip > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dark .category-chip {
+  border-color: #344139;
+  background: #222d27;
+}
+
+.category-chip i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.category-chip small {
+  color: #78827a;
+  text-transform: capitalize;
+}
+
+.label-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.label-actions .text-button {
+  padding: 0;
+  font-size: .75rem;
+}
+
+.compact-modal {
+  width: min(500px, 100%);
+}
+
+.transaction-row .soft-icon-button,
+.transaction-row .delete {
+  flex: 0 0 auto;
+}
+
+.transaction-row > div strong,
+.transaction-row > div span {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 760px) {
+  .category-settings {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .category-settings .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .transaction-row {
+    gap: .55rem;
+  }
+}

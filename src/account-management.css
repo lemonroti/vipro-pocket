@@ -1,0 +1,95 @@
+.account-page-head {
+  align-items: center;
+}
+
+.account-page-head h3 {
+  margin: .2rem 0 0;
+}
+
+.account-empty-actions {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+}
+
+.account-empty-actions p {
+  margin: 0;
+}
+
+.account-card .account-edit {
+  flex: 0 0 auto;
+}
+
+.account-card > i,
+.account-card > strong {
+  flex: 0 0 auto;
+}
+
+.account-card > div {
+  min-width: 0;
+}
+
+.account-card h3 {
+  overflow-wrap: anywhere;
+}
+
+.account-modal .form-grid {
+  align-items: end;
+}
+
+.account-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .75rem;
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  margin-right: auto;
+  border: 1px solid #ef6656;
+  border-radius: 12px;
+  padding: .75rem 1rem;
+  background: transparent;
+  color: #d94f42;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.form-error {
+  margin: 0;
+  border-radius: 12px;
+  padding: .75rem;
+  background: #fff0ed;
+  color: #b9362c;
+  font-size: .85rem;
+}
+
+.dark .form-error {
+  background: #3b2421;
+  color: #ff9e91;
+}
+
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+@media (max-width: 759px) {
+  .account-page-head {
+    align-items: flex-start;
+  }
+
+  .account-form-actions {
+    display: grid;
+  }
+
+  .danger-button {
+    margin-right: 0;
+  }
+}

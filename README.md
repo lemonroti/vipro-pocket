@@ -1,6 +1,6 @@
 # vipro-pocket
 
-A modern local-first personal budgeting web application.
+A personal budgeting web application backed by Supabase.
 
 ## Current version
 
@@ -13,7 +13,7 @@ The production web app includes:
 - Asset and liability accounts
 - Reports and CSV export
 - Dark mode and currency display settings
-- Browser persistence through Dexie and IndexedDB
+- Authenticated persistence through Supabase PostgreSQL with Row Level Security
 - Responsive desktop, Android browser, and iPhone Safari layouts
 
 ## Tech stack
@@ -24,7 +24,7 @@ The production web app includes:
 - Tailwind CSS
 - Vue Router
 - Pinia
-- Dexie / IndexedDB
+- Supabase Auth and PostgreSQL
 - Chart.js
 - Vitest
 - GitHub Actions and GitHub Pages
@@ -53,6 +53,8 @@ Expected URL:
 https://lemonroti.github.io/vipro-pocket/
 ```
 
+Production configuration, release, verification, and rollback procedures are documented in [`docs/production-operations.md`](docs/production-operations.md).
+
 ## Prototype archive
 
 The original single-file prototype remains available at:
@@ -63,7 +65,7 @@ prototype/personal-budget-prototype.html
 
 ## Deferred phases
 
-- Supabase authentication and cross-device synchronization
+- Offline support
 - Installable PWA service worker
 - Android and iOS packaging
 - Native home-screen widgets

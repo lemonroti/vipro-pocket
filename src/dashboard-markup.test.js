@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const app = readFileSync(new URL('./App.vue', import.meta.url), 'utf8')
+const dashboardUrl = new URL('./components/finance/FinanceDashboard.vue', import.meta.url)
+const app = existsSync(dashboardUrl) ? readFileSync(dashboardUrl, 'utf8') : ''
 
 describe('prototype dashboard markup', () => {
   it('contains the complete prototype sidebar structure', () => {

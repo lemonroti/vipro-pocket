@@ -2,45 +2,80 @@ name: Test and deploy GitHub Pages
 
 on:
   push:
-    branches: [main, feat/production-web-app]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  frontend-checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: npm test
-      - run: npm run build
-      - if: github.ref == 'refs/heads/main'
+          cache: npm
+      - name: Validate public Supabase configuration
+        shell: bash
+        run: |
+          if [[ -z "$VITE_SUPABASE_URL" || "$VITE_SUPABASE_URL" != https://*.supabase.co ]]; then
+            echo "VITE_SUPABASE_URL repository variable is missing or invalid."
+            exit 1
+          fi
+          if [[ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" || "$VITE_SUPABASE_PUBLISHABLE_KEY" != sb_publishable_* ]]; then
+            echo "VITE_SUPABASE_PUBLISHABLE_KEY repository variable is missing or invalid."
+            exit 1
+          fi
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run frontend tests
+        run: npm test
+      - name: Type-check and build
+        run: npm run build
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
-      - if: github.ref == 'refs/heads/main'
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
+  database-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.101.0
+      - name: Start local Postgres and apply migrations
+        run: supabase db start
+      - name: Run pgTAP database tests
+        run: supabase test db
+
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    timeout-minutes: 10
+    needs: [frontend-checks, database-tests]
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
