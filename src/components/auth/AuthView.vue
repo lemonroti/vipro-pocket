@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
@@ -18,6 +18,11 @@ const mode = computed(() => {
 })
 
 const title = computed(() => ({ login: 'Welcome back', signup: 'Create your account', forgot: 'Reset your password' })[mode.value])
+
+watch(mode, () => {
+  auth.clearError()
+  message.value = ''
+}, { immediate: true })
 
 function preventPendingNavigation(event: MouseEvent) {
   if (auth.pending) event.preventDefault()

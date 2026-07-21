@@ -168,6 +168,10 @@ export const useAuthStore = defineStore('auth', () => {
     initialized.value = false
   }
 
+  function clearError() {
+    error.value = ''
+  }
+
   return {
     session,
     user,
@@ -181,6 +185,7 @@ export const useAuthStore = defineStore('auth', () => {
     signOut,
     requestPasswordReset,
     updatePassword,
+    clearError,
     dispose,
   }
 })

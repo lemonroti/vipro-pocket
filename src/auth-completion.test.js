@@ -27,6 +27,9 @@ describe('Task 5 production auth wiring', () => {
     expect(main).toContain("component: () => import('./components/auth/AuthView.vue')")
     expect(main).toContain("component: () => import('./components/auth/UpdatePasswordView.vue')")
     expect(main).not.toContain("import App from './App.vue'")
+    expect(main).toContain('await router.isReady()')
+    expect(main).toContain('createApp(RouterView)')
+    expect(main).not.toContain("template: '<RouterView />'")
   })
 
   it('shows recovery loading and expired-link guidance before rendering the password form', () => {
@@ -40,5 +43,10 @@ describe('Task 5 production auth wiring', () => {
   it('prevents auth-route navigation while a mutation is pending', () => {
     expect(authView).toContain('@click="preventPendingNavigation"')
     expect(authView).toContain(':aria-disabled="auth.pending"')
+  })
+
+  it('clears stale feedback when moving between authentication forms', () => {
+    expect(authView).toContain('watch(mode')
+    expect(authView).toContain('auth.clearError()')
   })
 })
