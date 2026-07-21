@@ -193,6 +193,31 @@ describe('finance store', () => {
     expect(repository.copyPreviousMonthBudgets).toHaveBeenNthCalledWith(2, 'user-1', '2026-02-01')
   })
 
+  it('preserves target-only budget categories across matching-category and repeated copies', async () => {
+    const targetMatching = {
+      ...snapshot.budgets[0], id: 'target-matching', month: '2026-02-01', limitMinor: 500,
+    }
+    const targetOnly = {
+      ...snapshot.budgets[0], id: 'target-only', categoryId: 'category-c', month: '2026-02-01', limitMinor: 700,
+    }
+    repository.loadSnapshot.mockResolvedValue({
+      ...snapshot, budgets: [...snapshot.budgets, targetMatching, targetOnly],
+    })
+    const copiedMatching = { ...targetMatching, id: 'copied-matching', limitMinor: 2500 }
+    repository.copyPreviousMonthBudgets.mockResolvedValue([copiedMatching])
+    const store = useFinanceStore()
+    await store.load('user-1')
+
+    await store.copyPreviousMonthBudgets('2026-02-01')
+    await store.copyPreviousMonthBudgets('2026-02-01')
+
+    expect(store.budgets.filter(({ month }) => month === '2026-02-01')).toEqual([
+      copiedMatching,
+      targetOnly,
+    ])
+    expect(repository.copyPreviousMonthBudgets).toHaveBeenCalledTimes(2)
+  })
+
   it('updates profile from the server and reset clears every user-owned state field', async () => {
     repository.loadSnapshot.mockResolvedValue(snapshot)
     repository.updateProfileCurrency.mockResolvedValue({ ...snapshot.profile, currency: 'USD', updatedAt: '2' })
