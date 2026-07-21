@@ -173,7 +173,7 @@ Required:
 
 ### Task 7 — Remove Dexie while preserving approved UI
 
-Status: Not started
+Status: Complete (2026-07-22; 46 tests passing and production build verified)
 
 Required:
 

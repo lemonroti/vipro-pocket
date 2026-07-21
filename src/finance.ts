@@ -1,33 +1,4 @@
-export type TransactionType = 'income' | 'expense' | 'transfer'
-export type AccountKind = 'asset' | 'liability'
-
-export interface Account {
-  id: string
-  name: string
-  kind: AccountKind
-  openingBalanceMinor: number
-  color: string
-}
-
-export interface Transaction {
-  id: string
-  type: TransactionType
-  amountMinor: number
-  accountId: string
-  toAccountId?: string
-  category: string
-  merchant: string
-  note: string
-  date: string
-  createdAt: string
-}
-
-export interface Budget {
-  id: string
-  month: string
-  category: string
-  limitMinor: number
-}
+import type { Account, Transaction } from './types/finance-domain'
 
 export function monthKey(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -35,7 +6,7 @@ export function monthKey(date = new Date()): string {
 
 export function monthlySummary(transactions: Transaction[], month: string) {
   return transactions.reduce((summary, transaction) => {
-    if (!transaction.date.startsWith(month)) return summary
+    if (!transaction.transactionDate.startsWith(month)) return summary
     if (transaction.type === 'income') summary.incomeMinor += transaction.amountMinor
     if (transaction.type === 'expense') summary.expenseMinor += transaction.amountMinor
     return summary
@@ -62,8 +33,8 @@ export function netWorth(accounts: Account[], transactions: Transaction[]): numb
 
 export function categoryTotals(transactions: Transaction[], month: string): Record<string, number> {
   return transactions.reduce<Record<string, number>>((totals, transaction) => {
-    if (transaction.type === 'expense' && transaction.date.startsWith(month)) {
-      totals[transaction.category] = (totals[transaction.category] ?? 0) + transaction.amountMinor
+    if (transaction.type === 'expense' && transaction.transactionDate.startsWith(month)) {
+      totals[transaction.categoryId] = (totals[transaction.categoryId] ?? 0) + transaction.amountMinor
     }
     return totals
   }, {})
