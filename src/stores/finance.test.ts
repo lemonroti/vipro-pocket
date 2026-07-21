@@ -187,6 +187,10 @@ describe('finance store', () => {
     expect(store.budgets).toEqual([replacement])
     await store.copyPreviousMonthBudgets('2026-02-01')
     expect(store.budgets.map(({ id }) => id)).toEqual(['budget-new', 'copy-a', 'copy-b'])
+    await store.copyPreviousMonthBudgets('2026-02-01')
+    expect(store.budgets.map(({ id }) => id)).toEqual(['budget-new', 'copy-a', 'copy-b'])
+    expect(repository.copyPreviousMonthBudgets).toHaveBeenNthCalledWith(1, 'user-1', '2026-02-01')
+    expect(repository.copyPreviousMonthBudgets).toHaveBeenNthCalledWith(2, 'user-1', '2026-02-01')
   })
 
   it('updates profile from the server and reset clears every user-owned state field', async () => {

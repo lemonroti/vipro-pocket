@@ -209,13 +209,27 @@ Required:
 
 ### Task 10 — Monthly budgets
 
-Status: Not started
+Status: Complete (2026-07-22; 30 focused tests, 82 full-suite tests, and production build verified locally)
 
 Required:
 
 - Save monthly category budgets to Supabase
 - Copy the previous month’s budgets
 - Prevent duplicate month/category rows
+
+Completed:
+
+- Added an accessible `YYYY-MM` month selector with canonical `YYYY-MM-01` store calls
+- Added guarded previous-month copying with overwrite confirmation, pending locks, empty-source feedback, and safe rejection handling
+- Kept budget values server-backed, zero-safe, and deterministic across repeated copies
+- Kept dashboard and report calculations on the current month while allowing independent budget-month selection
+
+Verified:
+
+- Focused UI boundary, wiring, store, and repository tests pass (30 tests)
+- Full frontend suite passes (82 tests)
+- TypeScript checking and the production build pass locally
+- Final mounted browser journeys remain part of Task 12 verification
 
 ### Task 11 — GitHub Pages production configuration
 

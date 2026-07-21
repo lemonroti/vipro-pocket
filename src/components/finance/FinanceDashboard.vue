@@ -42,6 +42,7 @@ import {
   budgetForMonth,
   buildTransactionsCsv,
   canonicalBudgetMonth,
+  copyPreviousMonthBudgets as runBudgetCopy,
   createBudgetInput,
   createPendingLock,
   destroyCharts,
@@ -95,8 +96,10 @@ const typeFilter = ref('all')
 const dark = ref(localStorage.getItem('vipro-pocket-theme') === 'dark')
 const toast = ref('')
 const selectedMonth = ref(monthKey())
+const selectedBudgetMonth = ref(monthKey())
 const transactionPending = ref(false)
 const currencyPending = ref(false)
+const budgetCopyPending = ref(false)
 const pendingBudgetIds = ref(new Set<string>())
 const chartCanvas = ref<HTMLCanvasElement | null>(null)
 const categoryCanvas = ref<HTMLCanvasElement | null>(null)
@@ -106,6 +109,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 const transactionLock = createPendingLock()
 const currencyLock = createPendingLock()
 const budgetLocks = new Map<string, ReturnType<typeof createPendingLock>>()
+const budgetCopyLock = createPendingLock()
 const accountLock = createPendingLock()
 const categoryLock = createPendingLock()
 
@@ -128,6 +132,7 @@ const accountForm = ref<AccountDraft>({
 })
 const currency = computed(() => profile.value?.currency ?? 'MYR')
 const budgetMonth = computed(() => canonicalBudgetMonth(selectedMonth.value))
+const selectedBudgetCanonicalMonth = computed(() => canonicalBudgetMonth(selectedBudgetMonth.value))
 const canSubmit = computed(() => Boolean(transactionPayloadFromDraft(form.value, accounts.value, categories.value).payload))
 const editingAccount = computed(() => accounts.value.find(({ id }) => id === editingAccountId.value) ?? null)
 const editingTransaction = computed(() => transactions.value.find(({ id }) => id === editingTransactionId.value) ?? null)
@@ -136,6 +141,7 @@ const summary = computed(() => monthlySummary(transactions.value, selectedMonth.
 const balances = computed(() => accountBalances(accounts.value, transactions.value))
 const totalNetWorth = computed(() => netWorth(accounts.value, transactions.value))
 const categorySpend = computed(() => categoryTotals(transactions.value, selectedMonth.value))
+const selectedBudgetSpend = computed(() => categoryTotals(transactions.value, selectedBudgetMonth.value))
 const totalBudget = computed(() =>
   budgets.value.filter((budget) => budget.month === budgetMonth.value).reduce((sum, budget) => sum + budget.limitMinor, 0),
 )
@@ -162,8 +168,8 @@ const filteredTransactions = computed(() =>
 )
 const budgetRows = computed(() =>
   expenseCategories.value.map((category) => {
-    const limit = budgetForMonth(budgets.value, category.id, selectedMonth.value)?.limitMinor ?? 0
-    const spent = categorySpend.value[category.id] ?? 0
+    const limit = budgetForMonth(budgets.value, category.id, selectedBudgetMonth.value)?.limitMinor ?? 0
+    const spent = selectedBudgetSpend.value[category.id] ?? 0
     return {
       category,
       limit,
@@ -173,6 +179,8 @@ const budgetRows = computed(() =>
     }
   }),
 )
+const selectedBudgetTotal = computed(() => budgetRows.value.reduce((sum, row) => sum + row.limit, 0))
+const selectedBudgetSpent = computed(() => budgetRows.value.reduce((sum, row) => sum + row.spent, 0))
 const topCategories = computed(() =>
   Object.entries(categorySpend.value)
     .map(([categoryId, amount]) => ({
@@ -401,6 +409,10 @@ async function removeTransaction(transaction: Transaction) {
 
 async function updateBudget(categoryId: string, control: HTMLInputElement, currentLimitMinor: number) {
   const rollbackValue = (currentLimitMinor / 100).toFixed(2)
+  if (budgetCopyPending.value) {
+    control.value = rollbackValue
+    return
+  }
   const limitMinor = parseMinorUnits(control.value, { allowZero: true })
   if (limitMinor === null) {
     control.value = rollbackValue
@@ -414,21 +426,50 @@ async function updateBudget(categoryId: string, control: HTMLInputElement, curre
     return
   }
   pendingBudgetIds.value = new Set(pendingBudgetIds.value).add(categoryId)
-  const saved = await runControlMutation(
-    control,
-    rollbackValue,
-    () => finance.upsertBudget(createBudgetInput(categoryId, selectedMonth.value, limitMinor)),
-  )
-  if (saved) {
-    control.value = (limitMinor / 100).toFixed(2)
-    showToast('Budget saved')
-  } else {
-    showToast(finance.error || 'Unable to save the budget. Please try again.')
+  try {
+    const saved = await runControlMutation(
+      control,
+      rollbackValue,
+      () => finance.upsertBudget(createBudgetInput(categoryId, selectedBudgetMonth.value, limitMinor)),
+    )
+    if (saved) {
+      control.value = (limitMinor / 100).toFixed(2)
+      showToast('Budget saved')
+    } else {
+      showToast(finance.error || 'Unable to save the budget. Please try again.')
+    }
+  } finally {
+    const pending = new Set(pendingBudgetIds.value)
+    pending.delete(categoryId)
+    pendingBudgetIds.value = pending
+    lock.release()
   }
-  const pending = new Set(pendingBudgetIds.value)
-  pending.delete(categoryId)
-  pendingBudgetIds.value = pending
-  lock.release()
+}
+
+function updateBudgetMonth(control: HTMLInputElement) {
+  try {
+    canonicalBudgetMonth(control.value)
+    selectedBudgetMonth.value = control.value
+  } catch {
+    control.value = selectedBudgetMonth.value
+    showToast('Choose a valid budget month.')
+  }
+}
+
+async function copyBudgetsFromPreviousMonth() {
+  if (pendingBudgetIds.value.size > 0) return
+  const result = await runBudgetCopy({
+    displayMonth: selectedBudgetMonth.value,
+    hasTargetBudgets: budgets.value.some((budget) => budget.month === selectedBudgetCanonicalMonth.value),
+    copy: (targetMonth) => finance.copyPreviousMonthBudgets(targetMonth),
+    confirmOverwrite: (message) => confirm(message),
+    lock: budgetCopyLock,
+    setPending: (pending) => { budgetCopyPending.value = pending },
+  })
+  if (result.status === 'success') showToast(`Budgets copied from ${result.sourceMonth}`)
+  else if (result.status === 'empty') showToast(`No budgets found in ${result.sourceMonth}`)
+  else if (result.status === 'invalid') showToast('Choose a valid budget month.')
+  else if (result.status === 'rejected') showToast(finance.error || 'Unable to copy the previous month budgets. Please try again.')
 }
 
 async function updateCurrency(control: HTMLSelectElement) {
@@ -705,9 +746,13 @@ onBeforeUnmount(() => {
         </section>
 
         <section v-else-if="activePage === 'budgets'" class="stack">
-          <div class="metrics"><article class="metric"><span>Total budget</span><strong>{{ money(totalBudget, currency) }}</strong></article><article class="metric"><span>Spent</span><strong>{{ money(summary.expenseMinor, currency) }}</strong></article><article class="metric"><span>Remaining</span><strong>{{ money(remainingBudget, currency) }}</strong></article></div>
-          <p v-if="!budgets.some((budget) => budget.month === budgetMonth)" class="empty-state">No budgets yet.</p>
-          <div class="budget-grid"><article v-for="row in budgetRows" :key="row.category.id" class="card budget-item"><div class="section-head"><div><span>{{ row.category.name }}</span><h3>{{ money(row.spent, currency) }}</h3></div><b :class="{ danger: row.percent > 100 }">{{ row.percent }}%</b></div><div class="progress"><i :style="{ width: `${Math.min(row.percent, 100)}%`, background: row.category.color }"></i></div><div class="split"><span>{{ row.remaining >= 0 ? `${money(row.remaining, currency)} left` : `${money(Math.abs(row.remaining), currency)} over` }}</span><label>Limit <input :value="(row.limit / 100).toFixed(2)" type="number" min="0" step="0.01" :disabled="pendingBudgetIds.has(row.category.id)" @change="updateBudget(row.category.id, $event.target as HTMLInputElement, row.limit)" /></label></div></article></div>
+          <div class="budget-toolbar">
+            <label class="budget-month-control"><span>Budget month</span><input v-model="selectedBudgetMonth" type="month" :disabled="budgetCopyPending" @change="updateBudgetMonth($event.target as HTMLInputElement)" /></label>
+            <button class="secondary" type="button" :disabled="budgetCopyPending || pendingBudgetIds.size > 0" @click="copyBudgetsFromPreviousMonth">{{ budgetCopyPending ? 'Copying…' : 'Copy previous month' }}</button>
+          </div>
+          <div class="metrics"><article class="metric"><span>Total budget</span><strong>{{ money(selectedBudgetTotal, currency) }}</strong></article><article class="metric"><span>Spent</span><strong>{{ money(selectedBudgetSpent, currency) }}</strong></article><article class="metric"><span>Remaining</span><strong>{{ money(selectedBudgetTotal - selectedBudgetSpent, currency) }}</strong></article></div>
+          <p v-if="!budgets.some((budget) => budget.month === selectedBudgetCanonicalMonth)" class="empty-state">No budgets yet for this month.</p>
+          <div class="budget-grid"><article v-for="row in budgetRows" :key="row.category.id" class="card budget-item"><div class="section-head"><div><span>{{ row.category.name }}</span><h3>{{ money(row.spent, currency) }}</h3></div><b :class="{ danger: row.percent > 100 }">{{ row.percent }}%</b></div><div class="progress"><i :style="{ width: `${Math.min(row.percent, 100)}%`, background: row.category.color }"></i></div><div class="split"><span>{{ row.remaining >= 0 ? `${money(row.remaining, currency)} left` : `${money(Math.abs(row.remaining), currency)} over` }}</span><label>Limit <input :value="(row.limit / 100).toFixed(2)" type="number" min="0" step="0.01" :disabled="budgetCopyPending || pendingBudgetIds.has(row.category.id)" @change="updateBudget(row.category.id, $event.target as HTMLInputElement, row.limit)" /></label></div></article></div>
         </section>
 
         <section v-else-if="activePage === 'accounts'" class="stack">

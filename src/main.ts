@@ -8,6 +8,7 @@ import './style.css'
 import './sidebar-nav.css'
 import './account-management.css'
 import './category-transaction-management.css'
+import './monthly-budget-management.css'
 
 const router = createRouter({
   history: createWebHashHistory(),

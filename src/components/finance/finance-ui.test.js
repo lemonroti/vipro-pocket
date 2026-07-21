@@ -19,6 +19,67 @@ describe('finance UI boundary', () => {
     expect(ui.createBudgetInput('food-id', '2026-07', 12345)).toEqual({
       categoryId: 'food-id', month: '2026-07-01', limitMinor: 12345,
     })
+    expect(ui.previousDisplayMonth('2026-01')).toBe('2025-12')
+    expect(ui.previousDisplayMonth('2026-12')).toBe('2026-11')
+    for (const invalid of ['', '2026-1', '2026-00', '2026-13', '2026-01-01']) {
+      expect(() => ui.canonicalBudgetMonth(invalid)).toThrow('Month must use YYYY-MM format.')
+    }
+  })
+
+  it('copies only a canonical target month and reports an empty source without changing data', async () => {
+    const copy = vi.fn().mockResolvedValue([])
+    const setPending = vi.fn()
+
+    await expect(ui.copyPreviousMonthBudgets({
+      displayMonth: '2026-01',
+      hasTargetBudgets: false,
+      copy,
+      confirmOverwrite: vi.fn(),
+      lock: ui.createPendingLock(),
+      setPending,
+    })).resolves.toEqual({ status: 'empty', sourceMonth: '2025-12' })
+
+    expect(copy).toHaveBeenCalledWith('2026-01-01')
+    expect(setPending.mock.calls).toEqual([[true], [false]])
+  })
+
+  it('requires explicit overwrite confirmation and accurately preserves target-only rows', async () => {
+    const copy = vi.fn()
+    const confirmOverwrite = vi.fn().mockReturnValue(false)
+
+    await expect(ui.copyPreviousMonthBudgets({
+      displayMonth: '2026-07',
+      hasTargetBudgets: true,
+      copy,
+      confirmOverwrite,
+      lock: ui.createPendingLock(),
+      setPending: vi.fn(),
+    })).resolves.toEqual({ status: 'cancelled' })
+
+    expect(confirmOverwrite).toHaveBeenCalledWith(expect.stringMatching(/matching category limits will be overwritten/i))
+    expect(confirmOverwrite).toHaveBeenCalledWith(expect.stringMatching(/other July 2026 budgets will stay/i))
+    expect(copy).not.toHaveBeenCalled()
+  })
+
+  it('locks duplicate copies, releases pending state after rejection, and never calls the store for invalid months', async () => {
+    let rejectCopy
+    const copy = vi.fn(() => new Promise((_, reject) => { rejectCopy = reject }))
+    const setPending = vi.fn()
+    const lock = ui.createPendingLock()
+    const options = {
+      displayMonth: '2026-07', hasTargetBudgets: false, copy,
+      confirmOverwrite: vi.fn(), lock, setPending,
+    }
+
+    const first = ui.copyPreviousMonthBudgets(options)
+    await expect(ui.copyPreviousMonthBudgets(options)).resolves.toEqual({ status: 'locked' })
+    rejectCopy(new Error('private server detail'))
+    await expect(first).resolves.toEqual({ status: 'rejected' })
+    expect(setPending.mock.calls).toEqual([[true], [false]])
+
+    await expect(ui.copyPreviousMonthBudgets({ ...options, displayMonth: 'not-a-month' }))
+      .resolves.toEqual({ status: 'invalid' })
+    expect(copy).toHaveBeenCalledTimes(1)
   })
 
   it('accepts only finite safe amounts with at most two decimals', () => {
