@@ -20,6 +20,19 @@
   flex: 0 0 auto;
 }
 
+.account-card > i,
+.account-card > strong {
+  flex: 0 0 auto;
+}
+
+.account-card > div {
+  min-width: 0;
+}
+
+.account-card h3 {
+  overflow-wrap: anywhere;
+}
+
 .account-modal .form-grid {
   align-items: end;
 }

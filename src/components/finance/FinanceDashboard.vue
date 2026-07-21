@@ -672,7 +672,7 @@ onBeforeUnmount(() => {
 
     <button class="mobile-fab" :disabled="!accounts.length" :title="!accounts.length ? 'Add an account before creating a transaction' : ''" @click="openAdd('expense')">＋</button>
     <div v-if="accountModalOpen" class="modal-backdrop" @click.self="closeAccountModal">
-      <form class="modal account-modal" novalidate aria-describedby="account-form-error" @submit.prevent="submitAccount">
+      <form class="modal account-modal" novalidate :aria-describedby="accountError ? 'account-form-error' : undefined" @submit.prevent="submitAccount">
         <div class="modal-head">
           <div><span>{{ editingAccountId ? 'Edit account' : 'New account' }}</span><h2>{{ editingAccountId ? 'Update account' : 'Add account' }}</h2></div>
           <button class="icon-button" type="button" aria-label="Close account form" :disabled="accountPending" @click="closeAccountModal">×</button>
