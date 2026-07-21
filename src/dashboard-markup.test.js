@@ -12,6 +12,30 @@ describe('prototype dashboard markup', () => {
     expect(app).toContain('sidebar-profile')
   })
 
+  it('reuses every destination in an accessible mobile navigation', () => {
+    expect(app).toContain('<nav class="mobile-nav" aria-label="Primary navigation">')
+    expect(app).toMatch(/<button\s+v-for="item in navigation"/)
+    expect(app).toContain('class="mobile-nav-link"')
+    expect(app).toContain(':aria-label="item.mobileAriaLabel"')
+    expect(app).toContain(':aria-current="activePage === item.id ? \'page\' : undefined"')
+    expect(app).toContain('@click="switchPage(item.id)"')
+    expect(app).toContain('<component :is="item.icon" :size="20" />')
+    expect(app).toContain('<span>{{ item.mobileLabel }}</span>')
+    expect(app.match(/v-for="item in navigation"/g)?.length).toBe(2)
+    expect(app.match(/mobileLabel:/g)?.length).toBe(6)
+    const entries = [...app.matchAll(/label: '([^']+)', mobileLabel: '([^']+)', mobileAriaLabel: '([^']+)'/g)]
+    expect(entries).toHaveLength(6)
+    for (const [, , mobileLabel, mobileAriaLabel] of entries) {
+      expect(mobileAriaLabel.startsWith(mobileLabel)).toBe(true)
+    }
+  })
+
+  it('returns scroll and focus to the page heading when switching destinations', () => {
+    expect(app).toContain('<h1 ref="pageHeading" tabindex="-1">{{ pageTitle }}</h1>')
+    expect(app).toContain("window.scrollTo({ top: 0, behavior: 'auto' })")
+    expect(app).toContain('pageHeading.value?.focus({ preventScroll: true })')
+  })
+
   it('contains the circular budget gauge and four metric cards', () => {
     expect(app).toContain('budget-ring')
     expect(app).toContain('metric-grid')
