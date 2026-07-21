@@ -64,7 +64,7 @@ Convert the approved Vipro Pocket prototype into a public production web app bac
 
 ### Task 1 — Dependencies and environment
 
-Status: In progress
+Status: Complete
 
 Completed:
 
@@ -74,13 +74,13 @@ Completed:
 - Created `feat/supabase-production`
 - Added deterministic `package-lock.json`
 
-Remaining:
+Verified:
 
-- Verify locked install, tests, and production build in CI
+- GitHub Actions completed locked install, tests, type-check, and production build successfully
 
 ### Task 2 — Fresh Supabase project and schema
 
-Status: Database deployed; least-privilege hardening migration added, CI and hosted deployment pending
+Status: Complete
 
 Completed:
 
@@ -95,17 +95,17 @@ Completed:
 - Added missing foreign-key indexes
 - Saved the deployed migration history under `supabase/migrations/`
 - Added transaction-isolated pgTAP tests for schema, provisioning, RLS, ownership, transaction shapes, constraints, and exact table privileges
-- Added a pending migration that removes `TRUNCATE`, `REFERENCES`, and `TRIGGER` access from application roles
+- Added and deployed `20260721185613_restrict_app_table_privileges.sql` to remove `TRUNCATE`, `REFERENCES`, and `TRIGGER` access from application roles
+- Verified a clean PostgreSQL 17 start, full migration replay, and all 40 pgTAP assertions in GitHub Actions
+- Re-ran the hosted Security Advisor with zero findings
 
-Remaining:
+Advisory note:
 
-- Verify a clean local database start, migrations, and pgTAP tests in CI
-- Apply `20260721185038_restrict_app_table_privileges.sql` to the hosted project only after CI passes
-- Re-run Security and Performance Advisors after hosted deployment
+- Performance Advisor reports only expected informational unused-index notices because the beta database currently contains no user workload
 
 ### Task 3 — Typed Supabase browser client
 
-Status: Mostly complete
+Status: Complete
 
 Completed:
 
@@ -114,9 +114,9 @@ Completed:
 - Added `src/lib/auth-redirect.ts`
 - Added PKCE redirect tests
 
-Remaining:
+Verified:
 
-- Run tests and production build in a real repository workspace or CI
+- Redirect tests, TypeScript checking, and the production build pass in GitHub Actions
 
 ### Task 4 — Production data repository
 
