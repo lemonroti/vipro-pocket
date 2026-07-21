@@ -31,21 +31,21 @@
 - Consumes: existing `navigation`, `activePage`, and `switchPage(page: Page)` from `FinanceDashboard.vue`
 - Produces: `.mobile-nav`, `.mobile-nav-link`, and active-page `aria-current="page"` behavior
 
-- [ ] **Step 1: Write focused failing tests**
+- [x] **Step 1: Write focused failing tests**
 
 Add assertions that require a labeled mobile navigation rendered with `v-for="item in navigation"`, calls `switchPage(item.id)`, exposes `:aria-current="activePage === item.id ? 'page' : undefined"`, and has responsive CSS for six equal columns, safe-area padding, desktop hiding, and FAB clearance.
 
-- [ ] **Step 2: Run the focused tests and confirm RED**
+- [x] **Step 2: Run the focused tests and confirm RED**
 
 Run: `npm test -- src/dashboard-markup.test.js src/layout.test.js`
 
 Expected: FAIL because `.mobile-nav` markup and styling do not exist.
 
-- [ ] **Step 3: Implement the minimal navigation**
+- [x] **Step 3: Implement the minimal navigation**
 
 Render the shared navigation model after `<main>`, using semantic buttons with the existing icons and labels. Add mobile-first fixed-bar styles, active/focus-visible states, safe-area spacing, main-content clearance, and move the FAB above the bar. Hide the bar in the existing `@media(min-width:760px)` block.
 
-- [ ] **Step 4: Verify GREEN and regression safety**
+- [x] **Step 4: Verify GREEN and regression safety**
 
 Run: `npm test -- src/dashboard-markup.test.js src/layout.test.js`
 

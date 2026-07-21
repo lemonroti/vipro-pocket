@@ -792,6 +792,21 @@ onBeforeUnmount(() => {
       </div>
     </main>
 
+    <nav class="mobile-nav" aria-label="Primary navigation">
+      <button
+        v-for="item in navigation"
+        :key="item.id"
+        class="mobile-nav-link"
+        :class="{ active: activePage === item.id }"
+        type="button"
+        :aria-current="activePage === item.id ? 'page' : undefined"
+        @click="switchPage(item.id)"
+      >
+        <component :is="item.icon" :size="20" />
+        <span>{{ item.label }}</span>
+      </button>
+    </nav>
+
     <button class="mobile-fab" :disabled="!accounts.length" :title="!accounts.length ? 'Add an account before creating a transaction' : ''" @click="openAdd('expense')">＋</button>
     <div v-if="accountModalOpen" class="modal-backdrop" @click.self="closeAccountModal">
       <form class="modal account-modal" novalidate :aria-describedby="accountError ? 'account-form-error' : undefined" @submit.prevent="submitAccount">

@@ -15,4 +15,12 @@ describe('desktop app layout', () => {
     expect(normalizedCss).toContain('max-width:1500px')
     expect(normalizedCss).toContain('grid-template-columns:minmax(0,1.45fr)minmax(340px,.9fr)')
   })
+
+  it('provides a safe-area-aware six-destination mobile navigation', () => {
+    expect(normalizedCss).toContain('.mobile-nav{')
+    expect(normalizedCss).toContain('grid-template-columns:repeat(6,minmax(0,1fr))')
+    expect(normalizedCss).toContain('env(safe-area-inset-bottom)')
+    expect(normalizedCss).toContain('.mobile-nav{display:none}')
+    expect(normalizedCss).toContain('.mobile-fab{display:none}')
+  })
 })

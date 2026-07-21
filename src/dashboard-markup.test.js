@@ -12,6 +12,13 @@ describe('prototype dashboard markup', () => {
     expect(app).toContain('sidebar-profile')
   })
 
+  it('reuses every destination in an accessible mobile navigation', () => {
+    expect(app).toContain('<nav class="mobile-nav" aria-label="Primary navigation">')
+    expect(app).toContain('class="mobile-nav-link"')
+    expect(app).toContain(':aria-current="activePage === item.id ? \'page\' : undefined"')
+    expect(app.match(/v-for="item in navigation"/g)?.length).toBe(2)
+  })
+
   it('contains the circular budget gauge and four metric cards', () => {
     expect(app).toContain('budget-ring')
     expect(app).toContain('metric-grid')
