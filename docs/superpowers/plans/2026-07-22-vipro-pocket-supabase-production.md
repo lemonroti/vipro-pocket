@@ -187,7 +187,7 @@ Required:
 
 ### Task 8 — Account management UI
 
-Status: Not started
+Status: Complete (2026-07-22; 11 focused tests passing and production build verified)
 
 Required:
 

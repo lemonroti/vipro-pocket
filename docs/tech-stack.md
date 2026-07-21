@@ -115,7 +115,6 @@ Frontend Hosting       GitHub Pages
 
 ## Deferred work
 
-- Account management forms
 - Transaction editing and category creation
 - Budget copy workflows
 - Installable PWA and offline support

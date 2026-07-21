@@ -10,11 +10,13 @@ import {
   LayoutDashboard,
   Minus,
   Moon,
+  Pencil,
   PiggyBank,
   Plus,
   ReceiptText,
   Settings,
   Sun,
+  Trash2,
   TrendingUp,
   WalletCards,
 } from 'lucide-vue-next'
@@ -29,7 +31,13 @@ import {
   netWorth,
 } from '../../finance'
 import { useFinanceStore } from '../../stores/finance'
-import type { Category, Transaction, TransactionType } from '../../types/finance-domain'
+import type { Account, Category, Transaction, TransactionType } from '../../types/finance-domain'
+import {
+  accountDraftFromAccount,
+  deleteAccountWithConfirmation,
+  saveAccount,
+  type AccountDraft,
+} from './account-ui'
 import {
   budgetForMonth,
   buildTransactionsCsv,
@@ -63,6 +71,10 @@ const navigation = [
 
 const activePage = ref<Page>('dashboard')
 const modalOpen = ref(false)
+const accountModalOpen = ref(false)
+const accountPending = ref(false)
+const editingAccountId = ref<string | null>(null)
+const accountError = ref('')
 const search = ref('')
 const typeFilter = ref('all')
 const dark = ref(localStorage.getItem('vipro-pocket-theme') === 'dark')
@@ -79,6 +91,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 const transactionLock = createPendingLock()
 const currencyLock = createPendingLock()
 const budgetLocks = new Map<string, ReturnType<typeof createPendingLock>>()
+const accountLock = createPendingLock()
 
 const form = ref({
   type: 'expense' as TransactionType,
@@ -90,9 +103,16 @@ const form = ref({
   note: '',
   transactionDate: new Date().toISOString().slice(0, 10),
 })
+const accountForm = ref<AccountDraft>({
+  name: '',
+  kind: 'asset',
+  openingBalance: '0.00',
+  color: '#2aa883',
+})
 const currency = computed(() => profile.value?.currency ?? 'MYR')
 const budgetMonth = computed(() => canonicalBudgetMonth(selectedMonth.value))
 const canSubmit = computed(() => isValidTransactionDraft(form.value, accounts.value, categories.value))
+const editingAccount = computed(() => accounts.value.find(({ id }) => id === editingAccountId.value) ?? null)
 
 const summary = computed(() => monthlySummary(transactions.value, selectedMonth.value))
 const balances = computed(() => accountBalances(accounts.value, transactions.value))
@@ -196,6 +216,68 @@ function openAdd(type: TransactionType) {
   form.value.toAccountId = accounts.value.find(({ id }) => id !== form.value.accountId)?.id ?? ''
   form.value.categoryId = type === 'transfer' ? '' : categories.value.find((category) => category.type === type)?.id ?? ''
   modalOpen.value = true
+}
+
+function openCreateAccount() {
+  editingAccountId.value = null
+  accountForm.value = { name: '', kind: 'asset', openingBalance: '0.00', color: '#2aa883' }
+  accountError.value = ''
+  accountModalOpen.value = true
+}
+
+function openEditAccount(account: Account) {
+  editingAccountId.value = account.id
+  accountForm.value = accountDraftFromAccount(account)
+  accountError.value = ''
+  accountModalOpen.value = true
+}
+
+function closeAccountModal() {
+  if (accountPending.value) return
+  accountModalOpen.value = false
+  editingAccountId.value = null
+  accountError.value = ''
+}
+
+async function submitAccount() {
+  accountError.value = ''
+  const result = await saveAccount({
+    draft: accountForm.value,
+    accountId: editingAccountId.value,
+    createAccount: (input) => finance.createAccount(input),
+    updateAccount: (accountId, input) => finance.updateAccount(accountId, input),
+    lock: accountLock,
+    setPending: (pending) => { accountPending.value = pending },
+  })
+  if (result.status === 'success') {
+    const action = editingAccountId.value ? 'updated' : 'created'
+    closeAccountModal()
+    showToast(`Account ${action}`)
+    return
+  }
+  if (result.status === 'invalid' || result.status === 'rejected') {
+    accountError.value = result.message ?? 'Unable to save the account. Please try again.'
+    if (result.status === 'rejected') showToast(accountError.value)
+  }
+}
+
+async function removeAccount() {
+  if (!editingAccount.value) return
+  accountError.value = ''
+  const result = await deleteAccountWithConfirmation({
+    account: editingAccount.value,
+    deleteAccount: (accountId) => finance.deleteAccount(accountId),
+    confirmDelete: (message) => confirm(message),
+    lock: accountLock,
+    setPending: (pending) => { accountPending.value = pending },
+  })
+  if (result.status === 'success') {
+    closeAccountModal()
+    showToast('Account deleted')
+  } else if (result.status === 'rejected') {
+    accountError.value = result.message ?? 'Unable to delete the account. Please try again.'
+    showToast(accountError.value)
+  }
 }
 
 async function addTransaction() {
@@ -568,7 +650,19 @@ onBeforeUnmount(() => {
           <div class="budget-grid"><article v-for="row in budgetRows" :key="row.category.id" class="card budget-item"><div class="section-head"><div><span>{{ row.category.name }}</span><h3>{{ money(row.spent, currency) }}</h3></div><b :class="{ danger: row.percent > 100 }">{{ row.percent }}%</b></div><div class="progress"><i :style="{ width: `${Math.min(row.percent, 100)}%`, background: row.category.color }"></i></div><div class="split"><span>{{ row.remaining >= 0 ? `${money(row.remaining, currency)} left` : `${money(Math.abs(row.remaining), currency)} over` }}</span><label>Limit <input :value="(row.limit / 100).toFixed(2)" type="number" min="0" step="0.01" :disabled="pendingBudgetIds.has(row.category.id)" @change="updateBudget(row.category.id, $event.target as HTMLInputElement, row.limit)" /></label></div></article></div>
         </section>
 
-        <section v-else-if="activePage === 'accounts'" class="stack"><article class="hero compact"><span>Total net worth</span><h2>{{ money(totalNetWorth, currency) }}</h2><p>Assets minus liabilities</p></article><p v-if="!accounts.length" class="empty-state">No accounts yet. Account management is coming next.</p><div class="account-grid"><article v-for="account in accounts" :key="account.id" class="card account-card"><i :style="{ background: account.color }"></i><div><span>{{ account.kind }}</span><h3>{{ account.name }}</h3></div><strong>{{ money(balances[account.id] ?? 0, currency) }}</strong></article></div></section>
+        <section v-else-if="activePage === 'accounts'" class="stack">
+          <div class="section-head account-page-head"><div><span>Accounts</span><h3>Manage where your money lives</h3></div><button class="primary" type="button" @click="openCreateAccount"><Plus :size="17" /> Add account</button></div>
+          <article class="hero compact"><span>Total net worth</span><h2>{{ money(totalNetWorth, currency) }}</h2><p>Assets minus liabilities</p></article>
+          <div v-if="!accounts.length" class="card empty-state account-empty-actions"><p>No accounts yet. Add your first account to start recording transactions.</p><button class="primary" type="button" @click="openCreateAccount"><Plus :size="17" /> Add account</button></div>
+          <div class="account-grid">
+            <article v-for="account in accounts" :key="account.id" class="card account-card">
+              <i :style="{ background: account.color }"></i>
+              <div><span>{{ account.kind }}</span><h3>{{ account.name }}</h3></div>
+              <strong>{{ money(balances[account.id] ?? 0, currency) }}</strong>
+              <button class="soft-icon-button account-edit" type="button" :aria-label="`Edit ${account.name}`" @click="openEditAccount(account)"><Pencil :size="16" /></button>
+            </article>
+          </div>
+        </section>
 
         <section v-else-if="activePage === 'reports'" class="stack"><div class="metrics"><article class="metric"><span>Savings rate</span><strong>{{ savingsRate }}%</strong></article><article class="metric"><span>Average daily spending</span><strong>{{ money(Math.round(summary.expenseMinor / Math.max(1, new Date().getDate())), currency) }}</strong></article><article class="metric"><span>Largest category</span><strong>{{ largestCategoryName }}</strong></article></div><div class="content-grid"><article class="card chart-card"><h3>Income and expenses</h3><div class="chart-wrap"><canvas ref="chartCanvas"></canvas></div></article><article class="card"><h3>Current month categories</h3><div class="chart-wrap small"><canvas ref="categoryCanvas"></canvas></div></article></div></section>
 
@@ -577,6 +671,25 @@ onBeforeUnmount(() => {
     </main>
 
     <button class="mobile-fab" :disabled="!accounts.length" :title="!accounts.length ? 'Add an account before creating a transaction' : ''" @click="openAdd('expense')">＋</button>
+    <div v-if="accountModalOpen" class="modal-backdrop" @click.self="closeAccountModal">
+      <form class="modal account-modal" novalidate aria-describedby="account-form-error" @submit.prevent="submitAccount">
+        <div class="modal-head">
+          <div><span>{{ editingAccountId ? 'Edit account' : 'New account' }}</span><h2>{{ editingAccountId ? 'Update account' : 'Add account' }}</h2></div>
+          <button class="icon-button" type="button" aria-label="Close account form" :disabled="accountPending" @click="closeAccountModal">×</button>
+        </div>
+        <label><span>Account name</span><input v-model="accountForm.name" aria-label="Account name" maxlength="80" autocomplete="off" required /></label>
+        <div class="form-grid">
+          <label><span>Account type</span><select v-model="accountForm.kind" aria-label="Account type" required><option value="asset">Asset</option><option value="liability">Liability</option></select></label>
+          <label><span>Opening balance</span><input v-model="accountForm.openingBalance" aria-label="Opening balance" inputmode="decimal" type="number" step="0.01" required /></label>
+          <label><span>Color</span><input v-model="accountForm.color" aria-label="Account color" maxlength="7" pattern="#[0-9A-Fa-f]{6}" placeholder="#2aa883" required /></label>
+        </div>
+        <p v-if="accountError" id="account-form-error" class="form-error" role="alert">{{ accountError }}</p>
+        <div class="account-form-actions">
+          <button v-if="editingAccountId" class="danger-button" type="button" :disabled="accountPending" @click="removeAccount"><Trash2 :size="16" /> Delete account</button>
+          <button class="primary" type="submit" :disabled="accountPending">{{ accountPending ? 'Saving…' : editingAccountId ? 'Save changes' : 'Create account' }}</button>
+        </div>
+      </form>
+    </div>
     <div v-if="modalOpen" class="modal-backdrop" @click.self="modalOpen = false"><form class="modal" @submit.prevent="addTransaction"><div class="modal-head"><div><span>Quick add</span><h2>New transaction</h2></div><button type="button" class="icon-button" :disabled="transactionPending" @click="modalOpen = false">×</button></div><div class="segmented"><button v-for="type in ['expense', 'income', 'transfer']" :key="type" type="button" :class="{ active: form.type === type }" :disabled="transactionPending" @click="form.type = type as TransactionType">{{ type }}</button></div><label class="amount-label"><span>Amount</span><div><b>{{ currency }}</b><input v-model="form.amount" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="0.00" required autofocus /></div></label><div class="form-grid"><label><span>From account</span><select v-model="form.accountId" required><option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option></select></label><label v-if="form.type === 'transfer'"><span>To account</span><select v-model="form.toAccountId" required><option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="account.id === form.accountId">{{ account.name }}</option></select></label><label v-else><span>Category</span><select v-model="form.categoryId" required><option v-for="category in eligibleCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label><label><span>Date</span><input v-model="form.transactionDate" type="date" required /></label></div><label><span>Merchant or source</span><input v-model="form.merchant" placeholder="Where was this?" /></label><label><span>Note</span><textarea v-model="form.note" rows="2"></textarea></label><button class="primary full" type="submit" :disabled="transactionPending || !canSubmit">{{ transactionPending ? 'Saving…' : 'Save transaction' }}</button></form></div>
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
