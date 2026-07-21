@@ -31,6 +31,16 @@ export function canonicalBudgetMonth(displayMonth: string): string {
   return `${displayMonth}-01`
 }
 
+export function validatedBudgetMonth(control: ValueControl, currentMonth: string): string {
+  try {
+    canonicalBudgetMonth(control.value)
+    return control.value
+  } catch {
+    control.value = currentMonth
+    return currentMonth
+  }
+}
+
 export function previousDisplayMonth(displayMonth: string): string {
   const canonical = canonicalBudgetMonth(displayMonth)
   const date = new Date(`${canonical}T00:00:00Z`)

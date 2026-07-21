@@ -48,6 +48,7 @@ import {
   destroyCharts,
   parseMinorUnits,
   runControlMutation,
+  validatedBudgetMonth,
 } from './finance-ui'
 import {
   deleteTransactionWithConfirmation,
@@ -447,13 +448,9 @@ async function updateBudget(categoryId: string, control: HTMLInputElement, curre
 }
 
 function updateBudgetMonth(control: HTMLInputElement) {
-  try {
-    canonicalBudgetMonth(control.value)
-    selectedBudgetMonth.value = control.value
-  } catch {
-    control.value = selectedBudgetMonth.value
-    showToast('Choose a valid budget month.')
-  }
+  const requestedMonth = control.value
+  selectedBudgetMonth.value = validatedBudgetMonth(control, selectedBudgetMonth.value)
+  if (control.value !== requestedMonth) showToast('Choose a valid budget month.')
 }
 
 async function copyBudgetsFromPreviousMonth() {
@@ -747,7 +744,7 @@ onBeforeUnmount(() => {
 
         <section v-else-if="activePage === 'budgets'" class="stack">
           <div class="budget-toolbar">
-            <label class="budget-month-control"><span>Budget month</span><input v-model="selectedBudgetMonth" type="month" :disabled="budgetCopyPending" @change="updateBudgetMonth($event.target as HTMLInputElement)" /></label>
+            <label class="budget-month-control"><span>Budget month</span><input :value="selectedBudgetMonth" type="month" :disabled="budgetCopyPending" @change="updateBudgetMonth($event.target as HTMLInputElement)" /></label>
             <button class="secondary" type="button" :disabled="budgetCopyPending || pendingBudgetIds.size > 0" @click="copyBudgetsFromPreviousMonth">{{ budgetCopyPending ? 'Copying…' : 'Copy previous month' }}</button>
           </div>
           <div class="metrics"><article class="metric"><span>Total budget</span><strong>{{ money(selectedBudgetTotal, currency) }}</strong></article><article class="metric"><span>Spent</span><strong>{{ money(selectedBudgetSpent, currency) }}</strong></article><article class="metric"><span>Remaining</span><strong>{{ money(selectedBudgetTotal - selectedBudgetSpent, currency) }}</strong></article></div>

@@ -5,7 +5,9 @@ const dashboard = readFileSync(new URL('./components/finance/FinanceDashboard.vu
 
 describe('monthly budget management wiring', () => {
   it('provides an accessible native month selector and the copy action', () => {
-    expect(dashboard).toMatch(/<label[^>]*>\s*<span>Budget month<\/span>\s*<input[^>]*v-model="selectedBudgetMonth"[^>]*type="month"/s)
+    expect(dashboard).toMatch(/<label[^>]*>\s*<span>Budget month<\/span>\s*<input[^>]*:value="selectedBudgetMonth"[^>]*type="month"/s)
+    expect(dashboard).not.toContain('v-model="selectedBudgetMonth"')
+    expect(dashboard).toContain('selectedBudgetMonth.value = validatedBudgetMonth(control, selectedBudgetMonth.value)')
     expect(dashboard).toContain('Copy previous month')
     expect(dashboard).toContain('copyPreviousMonthBudgets')
   })

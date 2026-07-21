@@ -26,6 +26,19 @@ describe('finance UI boundary', () => {
     }
   })
 
+  it('preserves the last valid month when a month control is cleared or invalid', () => {
+    const cleared = { value: '' }
+    const invalid = { value: '2026-13' }
+    const valid = { value: '2025-12' }
+
+    expect(ui.validatedBudgetMonth(cleared, '2026-07')).toBe('2026-07')
+    expect(cleared.value).toBe('2026-07')
+    expect(ui.validatedBudgetMonth(invalid, '2026-07')).toBe('2026-07')
+    expect(invalid.value).toBe('2026-07')
+    expect(ui.validatedBudgetMonth(valid, '2026-07')).toBe('2025-12')
+    expect(ui.canonicalBudgetMonth(ui.validatedBudgetMonth(valid, '2026-07'))).toBe('2025-12-01')
+  })
+
   it('copies only a canonical target month and reports an empty source without changing data', async () => {
     const copy = vi.fn().mockResolvedValue([])
     const setPending = vi.fn()
