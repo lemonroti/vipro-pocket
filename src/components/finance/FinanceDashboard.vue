@@ -45,15 +45,25 @@ import {
   createBudgetInput,
   createPendingLock,
   destroyCharts,
-  isValidTransactionDraft,
   parseMinorUnits,
   runControlMutation,
 } from './finance-ui'
+import {
+  deleteTransactionWithConfirmation,
+  saveCategory,
+  saveTransaction,
+  transactionDraftFromTransaction,
+  transactionPayloadFromDraft,
+  transitionTransactionDraft,
+  type CategoryDraft,
+  type TransactionDraft,
+} from './transaction-ui'
 
 const finance = useFinanceStore()
 const { accounts, budgets, categories, profile, transactions } = storeToRefs(finance)
 const categoryById = computed(() => new Map(categories.value.map((category) => [category.id, category])))
 const expenseCategories = computed(() => categories.value.filter((category) => category.type === 'expense'))
+const customCategories = computed(() => categories.value.filter((category) => !category.isDefault))
 const eligibleCategories = computed(() =>
   form.value.type === 'transfer' ? [] : categories.value.filter((category) => category.type === form.value.type),
 )
@@ -71,6 +81,11 @@ const navigation = [
 
 const activePage = ref<Page>('dashboard')
 const modalOpen = ref(false)
+const editingTransactionId = ref<string | null>(null)
+const transactionError = ref('')
+const categoryModalOpen = ref(false)
+const categoryPending = ref(false)
+const categoryError = ref('')
 const accountModalOpen = ref(false)
 const accountPending = ref(false)
 const editingAccountId = ref<string | null>(null)
@@ -92,8 +107,9 @@ const transactionLock = createPendingLock()
 const currencyLock = createPendingLock()
 const budgetLocks = new Map<string, ReturnType<typeof createPendingLock>>()
 const accountLock = createPendingLock()
+const categoryLock = createPendingLock()
 
-const form = ref({
+const form = ref<TransactionDraft>({
   type: 'expense' as TransactionType,
   amount: '',
   accountId: accounts.value[0]?.id ?? '',
@@ -103,6 +119,7 @@ const form = ref({
   note: '',
   transactionDate: new Date().toISOString().slice(0, 10),
 })
+const categoryForm = ref<CategoryDraft>({ name: '', type: 'expense', color: '#78827a' })
 const accountForm = ref<AccountDraft>({
   name: '',
   kind: 'asset',
@@ -111,8 +128,9 @@ const accountForm = ref<AccountDraft>({
 })
 const currency = computed(() => profile.value?.currency ?? 'MYR')
 const budgetMonth = computed(() => canonicalBudgetMonth(selectedMonth.value))
-const canSubmit = computed(() => isValidTransactionDraft(form.value, accounts.value, categories.value))
+const canSubmit = computed(() => Boolean(transactionPayloadFromDraft(form.value, accounts.value, categories.value).payload))
 const editingAccount = computed(() => accounts.value.find(({ id }) => id === editingAccountId.value) ?? null)
+const editingTransaction = computed(() => transactions.value.find(({ id }) => id === editingTransactionId.value) ?? null)
 
 const summary = computed(() => monthlySummary(transactions.value, selectedMonth.value))
 const balances = computed(() => accountBalances(accounts.value, transactions.value))
@@ -209,13 +227,75 @@ function openAdd(type: TransactionType) {
     showToast('Add an account before creating a transaction')
     return
   }
-  form.value.type = type
-  form.value.accountId = accounts.value.some(({ id }) => id === form.value.accountId)
-    ? form.value.accountId
-    : accounts.value[0]?.id ?? ''
-  form.value.toAccountId = accounts.value.find(({ id }) => id !== form.value.accountId)?.id ?? ''
-  form.value.categoryId = type === 'transfer' ? '' : categories.value.find((category) => category.type === type)?.id ?? ''
+  editingTransactionId.value = null
+  transactionError.value = ''
+  const accountId = accounts.value[0]?.id ?? ''
+  form.value = {
+    type,
+    amount: '',
+    accountId,
+    toAccountId: type === 'transfer' ? accounts.value.find(({ id }) => id !== accountId)?.id ?? '' : '',
+    categoryId: type === 'transfer' ? '' : categories.value.find((category) => category.type === type)?.id ?? '',
+    merchant: '',
+    note: '',
+    transactionDate: new Date().toISOString().slice(0, 10),
+  }
   modalOpen.value = true
+}
+
+function openEditTransaction(transaction: Transaction) {
+  if (transactionPending.value) return
+  editingTransactionId.value = transaction.id
+  transactionError.value = ''
+  form.value = transactionDraftFromTransaction(transaction)
+  modalOpen.value = true
+}
+
+function closeTransactionModal() {
+  if (transactionPending.value) return
+  modalOpen.value = false
+  editingTransactionId.value = null
+  transactionError.value = ''
+}
+
+function changeTransactionType(type: TransactionType) {
+  if (transactionPending.value) return
+  form.value = transitionTransactionDraft(form.value, type, accounts.value, categories.value)
+  transactionError.value = ''
+}
+
+function openCategoryModal() {
+  const type = form.value.type === 'income' ? 'income' : 'expense'
+  categoryForm.value = { name: '', type, color: type === 'income' ? '#2aa883' : '#ef7b66' }
+  categoryError.value = ''
+  categoryModalOpen.value = true
+}
+
+function closeCategoryModal() {
+  if (categoryPending.value) return
+  categoryModalOpen.value = false
+  categoryError.value = ''
+}
+
+async function submitCategory() {
+  categoryError.value = ''
+  const requested = { ...categoryForm.value }
+  const result = await saveCategory({
+    draft: requested,
+    categories: categories.value,
+    createCategory: (input) => finance.createCategory(input),
+    lock: categoryLock,
+    setPending: (pending) => { categoryPending.value = pending },
+  })
+  if (result.status === 'success') {
+    const created = categories.value.find((category) =>
+      category.type === requested.type && category.name.toLocaleLowerCase() === requested.name.trim().toLocaleLowerCase())
+    if (created && form.value.type === created.type) form.value.categoryId = created.id
+    closeCategoryModal()
+    showToast('Category created')
+  } else if (result.status === 'invalid' || result.status === 'rejected') {
+    categoryError.value = result.message ?? 'Unable to create the category. Please try again.'
+  }
 }
 
 function openCreateAccount() {
@@ -280,57 +360,42 @@ async function removeAccount() {
   }
 }
 
-async function addTransaction() {
-  if (!canSubmit.value || !transactionLock.tryAcquire()) return
-  const amountMinor = parseMinorUnits(form.value.amount)
-  if (amountMinor === null) {
-    transactionLock.release()
-    return
-  }
-  transactionPending.value = true
-  try {
-    if (form.value.type === 'transfer') {
-      await finance.createTransaction({
-        type: 'transfer',
-        amountMinor,
-        accountId: form.value.accountId,
-        toAccountId: form.value.toAccountId,
-        merchant: form.value.merchant || 'Transfer',
-        note: form.value.note,
-        transactionDate: form.value.transactionDate,
-      })
-    } else {
-      const category = categoryById.value.get(form.value.categoryId)
-      await finance.createTransaction({
-        type: form.value.type,
-        amountMinor,
-        accountId: form.value.accountId,
-        categoryId: form.value.categoryId,
-        merchant: form.value.merchant || category?.name || 'Transaction',
-        note: form.value.note,
-        transactionDate: form.value.transactionDate,
-      })
-    }
-    modalOpen.value = false
-    form.value.amount = ''
-    form.value.merchant = ''
-    form.value.note = ''
-    showToast('Transaction saved')
-  } catch {
-    showToast(finance.error || 'Unable to create the transaction. Please try again.')
-  } finally {
-    transactionPending.value = false
-    transactionLock.release()
+async function submitTransaction() {
+  transactionError.value = ''
+  const result = await saveTransaction({
+    draft: form.value,
+    transactionId: editingTransactionId.value,
+    accounts: accounts.value,
+    categories: categories.value,
+    createTransaction: (input) => finance.createTransaction(input),
+    updateTransaction: (id, input) => finance.updateTransaction(id, input),
+    lock: transactionLock,
+    setPending: (pending) => { transactionPending.value = pending },
+  })
+  if (result.status === 'success') {
+    const action = editingTransactionId.value ? 'updated' : 'saved'
+    closeTransactionModal()
+    showToast(`Transaction ${action}`)
+  } else if (result.status === 'invalid' || result.status === 'rejected') {
+    transactionError.value = result.message ?? 'Unable to save the transaction. Please try again.'
   }
 }
 
-async function removeTransaction(id: string) {
-  if (!confirm('Delete this transaction?')) return
-  try {
-    await finance.deleteTransaction(id)
+async function removeTransaction(transaction: Transaction) {
+  transactionError.value = ''
+  const result = await deleteTransactionWithConfirmation({
+    transaction,
+    deleteTransaction: (id) => finance.deleteTransaction(id),
+    confirmDelete: (message) => confirm(message),
+    lock: transactionLock,
+    setPending: (pending) => { transactionPending.value = pending },
+  })
+  if (result.status === 'success') {
+    if (editingTransactionId.value === transaction.id) closeTransactionModal()
     showToast('Transaction deleted')
-  } catch {
-    showToast(finance.error || 'Unable to delete the transaction. Please try again.')
+  } else if (result.status === 'rejected') {
+    transactionError.value = result.message ?? 'Unable to delete the transaction. Please try again.'
+    showToast(transactionError.value)
   }
 }
 
@@ -476,12 +541,6 @@ watch(
   { immediate: true },
 )
 watch([transactions, categories, selectedMonth, activePage], () => nextTick(renderCharts), { deep: true, immediate: true })
-watch(
-  () => form.value.type,
-  (type) => {
-    form.value.categoryId = type === 'transfer' ? '' : categories.value.find((category) => category.type === type)?.id ?? ''
-  },
-)
 onBeforeUnmount(() => {
   destroyCharts(cashChart, categoryChart)
   if (toastTimer) clearTimeout(toastTimer)
@@ -633,6 +692,7 @@ onBeforeUnmount(() => {
                 <span class="transaction-icon" :style="{ background: '#eef1ef', color: transactionCategoryColor(item) }">{{ transactionCategoryName(item).slice(0, 1) }}</span>
                 <div><strong>{{ item.merchant }}</strong><span>{{ transactionCategoryName(item) }} · {{ item.transactionDate }}</span></div>
                 <b :class="item.type">{{ item.type === 'expense' ? '−' : item.type === 'income' ? '+' : '' }}{{ money(item.amountMinor, currency) }}</b>
+                <button class="soft-icon-button" type="button" :aria-label="`Edit transaction ${item.merchant}`" :disabled="transactionPending" @click="openEditTransaction(item)"><Pencil :size="15" /></button>
               </div>
               <p v-if="!sortedTransactions.length" class="empty-state">No transactions yet.</p>
             </div>
@@ -641,7 +701,7 @@ onBeforeUnmount(() => {
 
         <section v-else-if="activePage === 'transactions'" class="stack">
           <div class="toolbar"><input v-model="search" placeholder="Search transactions…" /><select v-model="typeFilter"><option value="all">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option></select></div>
-          <article class="card"><div class="transaction-list"><div v-for="item in filteredTransactions" :key="item.id" class="transaction-row"><i class="category-dot" :style="{ background: transactionCategoryColor(item) }"></i><div><strong>{{ item.merchant }}</strong><span>{{ transactionCategoryName(item) }} · {{ item.transactionDate }} · {{ accounts.find((account) => account.id === item.accountId)?.name }}</span></div><b :class="item.type">{{ item.type === 'expense' ? '−' : item.type === 'income' ? '+' : '' }}{{ money(item.amountMinor, currency) }}</b><button class="delete" @click="removeTransaction(item.id)">×</button></div><div v-if="!transactions.length" class="empty-state">No transactions yet.</div><div v-else-if="!filteredTransactions.length" class="empty-state">No transactions match your filters.</div></div></article>
+          <article class="card"><div class="transaction-list"><div v-for="item in filteredTransactions" :key="item.id" class="transaction-row"><i class="category-dot" :style="{ background: transactionCategoryColor(item) }"></i><div><strong>{{ item.merchant }}</strong><span>{{ transactionCategoryName(item) }} · {{ item.transactionDate }} · {{ accounts.find((account) => account.id === item.accountId)?.name }}</span></div><b :class="item.type">{{ item.type === 'expense' ? '−' : item.type === 'income' ? '+' : '' }}{{ money(item.amountMinor, currency) }}</b><button class="soft-icon-button" type="button" :aria-label="`Edit transaction ${item.merchant}`" :disabled="transactionPending" @click="openEditTransaction(item)"><Pencil :size="15" /></button><button class="delete" type="button" :aria-label="`Delete transaction ${item.merchant}`" :disabled="transactionPending" @click="removeTransaction(item)"><Trash2 :size="15" /></button></div><div v-if="!transactions.length" class="empty-state">No transactions yet.</div><div v-else-if="!filteredTransactions.length" class="empty-state">No transactions match your filters.</div></div></article>
         </section>
 
         <section v-else-if="activePage === 'budgets'" class="stack">
@@ -666,7 +726,16 @@ onBeforeUnmount(() => {
 
         <section v-else-if="activePage === 'reports'" class="stack"><div class="metrics"><article class="metric"><span>Savings rate</span><strong>{{ savingsRate }}%</strong></article><article class="metric"><span>Average daily spending</span><strong>{{ money(Math.round(summary.expenseMinor / Math.max(1, new Date().getDate())), currency) }}</strong></article><article class="metric"><span>Largest category</span><strong>{{ largestCategoryName }}</strong></article></div><div class="content-grid"><article class="card chart-card"><h3>Income and expenses</h3><div class="chart-wrap"><canvas ref="chartCanvas"></canvas></div></article><article class="card"><h3>Current month categories</h3><div class="chart-wrap small"><canvas ref="categoryCanvas"></canvas></div></article></div></section>
 
-        <section v-else class="settings-grid"><article class="card settings-card"><div><span>Appearance</span><h3>Dark mode</h3><p>Use a dark interface on this device.</p></div><button class="toggle" :class="{ on: dark }" @click="dark = !dark"><i></i></button></article><article class="card settings-card"><div><span>Currency</span><h3>Display currency</h3><p>Stored amounts remain unchanged.</p></div><select :value="currency" :disabled="currencyPending" @change="updateCurrency($event.target as HTMLSelectElement)"><option>MYR</option><option>SGD</option><option>USD</option></select></article><article class="card settings-card"><div><span>Data</span><h3>Export CSV</h3></div><button class="secondary" @click="exportCsv">Export</button></article></section>
+        <section v-else class="settings-grid">
+          <article class="card settings-card"><div><span>Appearance</span><h3>Dark mode</h3><p>Use a dark interface on this device.</p></div><button class="toggle" :class="{ on: dark }" @click="dark = !dark"><i></i></button></article>
+          <article class="card settings-card"><div><span>Currency</span><h3>Display currency</h3><p>Stored amounts remain unchanged.</p></div><select :value="currency" :disabled="currencyPending" @change="updateCurrency($event.target as HTMLSelectElement)"><option>MYR</option><option>SGD</option><option>USD</option></select></article>
+          <article class="card settings-card"><div><span>Data</span><h3>Export CSV</h3></div><button class="secondary" @click="exportCsv">Export</button></article>
+          <article class="card category-settings">
+            <div class="section-head"><div><span>Custom categories</span><h3>Income and expense labels</h3></div><button class="secondary" type="button" @click="openCategoryModal"><Plus :size="16" /> Add category</button></div>
+            <p v-if="!customCategories.length" class="empty-state">No custom categories yet. Your default categories remain available.</p>
+            <div v-else class="category-chip-list"><span v-for="category in customCategories" :key="category.id" class="category-chip"><i :style="{ background: category.color }"></i>{{ category.name }}<small>{{ category.type }}</small></span></div>
+          </article>
+        </section>
       </div>
     </main>
 
@@ -690,7 +759,32 @@ onBeforeUnmount(() => {
         </div>
       </form>
     </div>
-    <div v-if="modalOpen" class="modal-backdrop" @click.self="modalOpen = false"><form class="modal" @submit.prevent="addTransaction"><div class="modal-head"><div><span>Quick add</span><h2>New transaction</h2></div><button type="button" class="icon-button" :disabled="transactionPending" @click="modalOpen = false">×</button></div><div class="segmented"><button v-for="type in ['expense', 'income', 'transfer']" :key="type" type="button" :class="{ active: form.type === type }" :disabled="transactionPending" @click="form.type = type as TransactionType">{{ type }}</button></div><label class="amount-label"><span>Amount</span><div><b>{{ currency }}</b><input v-model="form.amount" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="0.00" required autofocus /></div></label><div class="form-grid"><label><span>From account</span><select v-model="form.accountId" required><option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option></select></label><label v-if="form.type === 'transfer'"><span>To account</span><select v-model="form.toAccountId" required><option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="account.id === form.accountId">{{ account.name }}</option></select></label><label v-else><span>Category</span><select v-model="form.categoryId" required><option v-for="category in eligibleCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label><label><span>Date</span><input v-model="form.transactionDate" type="date" required /></label></div><label><span>Merchant or source</span><input v-model="form.merchant" placeholder="Where was this?" /></label><label><span>Note</span><textarea v-model="form.note" rows="2"></textarea></label><button class="primary full" type="submit" :disabled="transactionPending || !canSubmit">{{ transactionPending ? 'Saving…' : 'Save transaction' }}</button></form></div>
+    <div v-if="categoryModalOpen" class="modal-backdrop" @click.self="closeCategoryModal">
+      <form class="modal compact-modal" novalidate :aria-describedby="categoryError ? 'category-form-error' : undefined" @submit.prevent="submitCategory">
+        <div class="modal-head"><div><span>Custom category</span><h2>Add category</h2></div><button class="icon-button" type="button" aria-label="Close category form" :disabled="categoryPending" @click="closeCategoryModal">×</button></div>
+        <label><span>Category name</span><input v-model="categoryForm.name" maxlength="50" autocomplete="off" required /></label>
+        <div class="form-grid"><label><span>Type</span><select v-model="categoryForm.type" required><option value="expense">Expense</option><option value="income">Income</option></select></label><label><span>Color</span><input v-model="categoryForm.color" maxlength="7" pattern="#[0-9A-Fa-f]{6}" placeholder="#78827a" required /></label></div>
+        <p v-if="categoryError" id="category-form-error" class="form-error" role="alert">{{ categoryError }}</p>
+        <button class="primary full" type="submit" :disabled="categoryPending">{{ categoryPending ? 'Saving…' : 'Create category' }}</button>
+      </form>
+    </div>
+    <div v-if="modalOpen && !categoryModalOpen" class="modal-backdrop" @click.self="closeTransactionModal">
+      <form class="modal" novalidate :aria-describedby="transactionError ? 'transaction-form-error' : undefined" @submit.prevent="submitTransaction">
+        <div class="modal-head"><div><span>{{ editingTransactionId ? 'Edit transaction' : 'Quick add' }}</span><h2>{{ editingTransactionId ? 'Update transaction' : 'New transaction' }}</h2></div><button type="button" class="icon-button" aria-label="Close transaction form" :disabled="transactionPending" @click="closeTransactionModal">×</button></div>
+        <div class="segmented"><button v-for="type in ['expense', 'income', 'transfer']" :key="type" type="button" :class="{ active: form.type === type }" :disabled="transactionPending" @click="changeTransactionType(type as TransactionType)">{{ type }}</button></div>
+        <label class="amount-label"><span>Amount</span><div><b>{{ currency }}</b><input v-model="form.amount" inputmode="decimal" type="number" min="0.01" step="0.01" :disabled="transactionPending" placeholder="0.00" required autofocus /></div></label>
+        <div class="form-grid">
+          <label><span>From account</span><select v-model="form.accountId" :disabled="transactionPending" required><option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option></select></label>
+          <label v-if="form.type === 'transfer'"><span>To account</span><select v-model="form.toAccountId" :disabled="transactionPending" required><option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="account.id === form.accountId">{{ account.name }}</option></select></label>
+          <label v-else><span class="label-actions">Category <button class="text-button" type="button" :disabled="transactionPending" @click="openCategoryModal">Add category</button></span><select v-model="form.categoryId" :disabled="transactionPending" required><option v-for="category in eligibleCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
+          <label><span>Date</span><input v-model="form.transactionDate" type="date" :disabled="transactionPending" required /></label>
+        </div>
+        <label><span>Merchant or source</span><input v-model="form.merchant" maxlength="120" :disabled="transactionPending" placeholder="Where was this?" /></label>
+        <label><span>Note</span><textarea v-model="form.note" maxlength="500" :disabled="transactionPending" rows="2"></textarea></label>
+        <p v-if="transactionError" id="transaction-form-error" class="form-error" role="alert">{{ transactionError }}</p>
+        <div class="account-form-actions"><button v-if="editingTransaction" class="danger-button" type="button" :disabled="transactionPending" @click="removeTransaction(editingTransaction)"><Trash2 :size="16" /> Delete transaction</button><button class="primary" type="submit" :disabled="transactionPending || !canSubmit">{{ transactionPending ? 'Saving…' : editingTransactionId ? 'Save changes' : 'Save transaction' }}</button></div>
+      </form>
+    </div>
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>

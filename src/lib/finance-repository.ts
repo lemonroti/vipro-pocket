@@ -223,6 +223,9 @@ export function createFinanceRepository(
         color: input.color,
         is_default: false,
       }).select('*').single()
+      if (error?.code === '23505') {
+        throw new Error('A category with this name and type already exists.')
+      }
       throwIfError(error)
       return mapCategory(requireData(data))
     },

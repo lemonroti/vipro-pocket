@@ -291,6 +291,18 @@ describe('finance repository', () => {
       .rejects.toThrow('This account is used by one or more transactions and cannot be deleted.')
   })
 
+  it('maps duplicate categories by stable SQLSTATE without leaking database details', async () => {
+    const { client } = fakeClient({
+      categories: [{
+        data: null,
+        error: { code: '23505', message: 'duplicate key violates categories_user_name_type_unique', details: 'private', hint: null },
+      }],
+    })
+    await expect(createFinanceRepository(client).createCategory('user-1', {
+      name: 'Food', type: 'expense', color: '#ef7b66',
+    })).rejects.toThrow('A category with this name and type already exists.')
+  })
+
   it('copies January budgets from the previous December with one correctly targeted upsert', async () => {
     const sourceRows = [
       { ...budgetRow, id: 'source-a', category_id: 'category-a', month: '2025-12-01', limit_minor: 10000 },

@@ -7,6 +7,7 @@ import UpdatePasswordView from './components/auth/UpdatePasswordView.vue'
 import './style.css'
 import './sidebar-nav.css'
 import './account-management.css'
+import './category-transaction-management.css'
 
 const router = createRouter({
   history: createWebHashHistory(),
