@@ -15,6 +15,7 @@ const lifecycle = createProtectedFinanceLifecycle({
   getUserId: () => auth.user?.id ?? null,
   redirectToLogin: async () => { await router.replace('/login') },
 })
+const { bootstrapError } = lifecycle
 
 onMounted(() => lifecycle.start())
 
@@ -22,7 +23,13 @@ onBeforeUnmount(() => lifecycle.stop())
 </script>
 
 <template>
-  <main v-if="!auth.initialized || finance.loading" class="app-loading">Loading Vipro Pocket…</main>
+  <main v-if="bootstrapError" class="app-loading">
+    <section class="load-error" role="alert">
+      <p>{{ bootstrapError }}</p>
+      <button type="button" @click="lifecycle.retry">Try again</button>
+    </section>
+  </main>
+  <main v-else-if="!auth.initialized || finance.loading" class="app-loading">Loading Vipro Pocket…</main>
   <main v-else-if="auth.user && finance.error && !finance.initialized" class="app-loading">
     <section class="load-error" role="alert">
       <p>{{ finance.error }}</p>

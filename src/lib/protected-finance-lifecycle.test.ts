@@ -49,4 +49,103 @@ describe('protected finance lifecycle', () => {
 
     expect(load).toHaveBeenCalledTimes(2)
   })
+
+  it('starts a fresh same-user load after a null session invalidates a pending load', async () => {
+    const userId = ref<string | null>('user-a')
+    let resolveOld!: () => void
+    let resolveFresh!: () => void
+    const load = vi.fn()
+      .mockReturnValueOnce(new Promise<void>((resolve) => { resolveOld = resolve }))
+      .mockReturnValueOnce(new Promise<void>((resolve) => { resolveFresh = resolve }))
+    const lifecycle = createProtectedFinanceLifecycle({
+      auth: { initialize: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() },
+      finance: { userId: null, initialized: false, load, reset: vi.fn() },
+      getUserId: () => userId.value,
+      redirectToLogin: vi.fn(),
+    })
+    await lifecycle.start()
+
+    userId.value = null
+    await Promise.resolve()
+    userId.value = 'user-a'
+    await Promise.resolve()
+    expect(load).toHaveBeenCalledTimes(2)
+
+    resolveOld()
+    await Promise.resolve()
+    expect(load).toHaveBeenCalledTimes(2)
+    resolveFresh()
+    await Promise.resolve()
+  })
+
+  it('deduplicates overlapping starts and does not install a watcher after a stopped initialization resolves', async () => {
+    let resolveInitialize!: () => void
+    const initialize = vi.fn(() => new Promise<void>((resolve) => { resolveInitialize = resolve }))
+    const load = vi.fn().mockResolvedValue(undefined)
+    const dispose = vi.fn()
+    const userId = ref<string | null>('user-1')
+    const lifecycle = createProtectedFinanceLifecycle({
+      auth: { initialize, dispose },
+      finance: { userId: null, initialized: false, load, reset: vi.fn() },
+      getUserId: () => userId.value,
+      redirectToLogin: vi.fn(),
+    })
+
+    const first = lifecycle.start()
+    const second = lifecycle.start()
+    expect(initialize).toHaveBeenCalledOnce()
+    lifecycle.stop()
+    resolveInitialize()
+    await Promise.all([first, second])
+    userId.value = 'user-2'
+    await Promise.resolve()
+
+    expect(load).not.toHaveBeenCalled()
+    expect(dispose).toHaveBeenCalled()
+  })
+
+  it('can restart safely while a stopped initialization is still settling', async () => {
+    let resolveFirst!: () => void
+    const initialize = vi.fn()
+      .mockReturnValueOnce(new Promise<void>((resolve) => { resolveFirst = resolve }))
+      .mockResolvedValueOnce(undefined)
+    const load = vi.fn().mockResolvedValue(undefined)
+    const lifecycle = createProtectedFinanceLifecycle({
+      auth: { initialize, dispose: vi.fn() },
+      finance: { userId: null, initialized: false, load, reset: vi.fn() },
+      getUserId: () => 'user-1',
+      redirectToLogin: vi.fn(),
+    })
+
+    const stoppedStart = lifecycle.start()
+    lifecycle.stop()
+    const restarted = lifecycle.start()
+    resolveFirst()
+    await Promise.all([stoppedStart, restarted])
+    await Promise.resolve()
+
+    expect(initialize).toHaveBeenCalledTimes(2)
+    expect(load).toHaveBeenCalledOnce()
+  })
+
+  it('turns rejected auth initialization into a safe retryable bootstrap error', async () => {
+    const initialize = vi.fn()
+      .mockRejectedValueOnce(new Error('private auth endpoint detail'))
+      .mockResolvedValueOnce(undefined)
+    const load = vi.fn().mockResolvedValue(undefined)
+    const lifecycle = createProtectedFinanceLifecycle({
+      auth: { initialize, dispose: vi.fn() },
+      finance: { userId: null, initialized: false, load, reset: vi.fn() },
+      getUserId: () => 'user-1',
+      redirectToLogin: vi.fn(),
+    })
+
+    await expect(lifecycle.start()).resolves.toBeUndefined()
+    expect(lifecycle.bootstrapError.value).toBe('Unable to initialize your session. Please try again.')
+    await lifecycle.retry()
+
+    expect(initialize).toHaveBeenCalledTimes(2)
+    expect(lifecycle.bootstrapError.value).toBe('')
+    expect(load).toHaveBeenCalledOnce()
+  })
 })

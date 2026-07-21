@@ -59,14 +59,15 @@ export const useFinanceStore = defineStore('finance', () => {
     return userId.value
   }
 
-  async function mutate<T>(message: string, request: () => Promise<T>, reconcile: (row: T) => void): Promise<T> {
+  async function mutate<T>(ownerUserId: string, message: string, request: () => Promise<T>, reconcile: (row: T) => void): Promise<T> {
+    const generation = loadGeneration
     error.value = ''
     try {
       const row = await request()
-      reconcile(row)
+      if (generation === loadGeneration && userId.value === ownerUserId) reconcile(row)
       return row
     } catch (cause) {
-      error.value = message
+      if (generation === loadGeneration && userId.value === ownerUserId) error.value = message
       throw cause
     }
   }
@@ -95,70 +96,70 @@ export const useFinanceStore = defineStore('finance', () => {
 
   function updateProfileCurrency(currency: string) {
     const id = requireUserId()
-    return mutate('Unable to update the currency. Please try again.',
+    return mutate(id, 'Unable to update the currency. Please try again.',
       () => repository.updateProfileCurrency(id, currency),
       (row) => { profile.value = row })
   }
 
   function createAccount(input: CreateAccountInput) {
     const id = requireUserId()
-    return mutate('Unable to create the account. Please try again.',
+    return mutate(id, 'Unable to create the account. Please try again.',
       () => repository.createAccount(id, input),
       (row) => { accounts.value = mergeById(accounts.value, row) })
   }
 
   function updateAccount(accountId: string, input: UpdateAccountInput) {
     const id = requireUserId()
-    return mutate('Unable to update the account. Please try again.',
+    return mutate(id, 'Unable to update the account. Please try again.',
       () => repository.updateAccount(id, accountId, input),
       (row) => { accounts.value = mergeById(accounts.value, row) })
   }
 
   function deleteAccount(accountId: string) {
     const id = requireUserId()
-    return mutate('Unable to delete the account. Please try again.',
+    return mutate(id, 'Unable to delete the account. Please try again.',
       () => repository.deleteAccount(id, accountId),
       (row) => { accounts.value = accounts.value.filter(({ id: candidateId }) => candidateId !== row.id) })
   }
 
   function createCategory(input: CreateCategoryInput) {
     const id = requireUserId()
-    return mutate('Unable to create the category. Please try again.',
+    return mutate(id, 'Unable to create the category. Please try again.',
       () => repository.createCategory(id, input),
       (row) => { categories.value = mergeById(categories.value, row) })
   }
 
   function createTransaction(input: CreateTransactionInput) {
     const id = requireUserId()
-    return mutate('Unable to create the transaction. Please try again.',
+    return mutate(id, 'Unable to create the transaction. Please try again.',
       () => repository.createTransaction(id, input),
       (row) => { transactions.value = mergeById(transactions.value, row) })
   }
 
   function updateTransaction(transactionId: string, input: UpdateTransactionInput) {
     const id = requireUserId()
-    return mutate('Unable to update the transaction. Please try again.',
+    return mutate(id, 'Unable to update the transaction. Please try again.',
       () => repository.updateTransaction(id, transactionId, input),
       (row) => { transactions.value = mergeById(transactions.value, row) })
   }
 
   function deleteTransaction(transactionId: string) {
     const id = requireUserId()
-    return mutate('Unable to delete the transaction. Please try again.',
+    return mutate(id, 'Unable to delete the transaction. Please try again.',
       () => repository.deleteTransaction(id, transactionId),
       (row) => { transactions.value = transactions.value.filter(({ id: candidateId }) => candidateId !== row.id) })
   }
 
   function upsertBudget(input: UpsertBudgetInput) {
     const id = requireUserId()
-    return mutate('Unable to save the budget. Please try again.',
+    return mutate(id, 'Unable to save the budget. Please try again.',
       () => repository.upsertBudget(id, input),
       (row) => { budgets.value = mergeBudget(budgets.value, row) })
   }
 
   function copyPreviousMonthBudgets(targetMonth: string) {
     const id = requireUserId()
-    return mutate('Unable to copy the previous month budgets. Please try again.',
+    return mutate(id, 'Unable to copy the previous month budgets. Please try again.',
       () => repository.copyPreviousMonthBudgets(id, targetMonth),
       (rows) => { budgets.value = rows.reduce(mergeBudget, budgets.value) })
   }

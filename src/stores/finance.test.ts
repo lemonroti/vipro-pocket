@@ -93,6 +93,40 @@ describe('finance store', () => {
     expect(store.error).toBe('Unable to create the account. Please try again.')
   })
 
+  it('does not reconcile a successful mutation after reset invalidates its owner', async () => {
+    repository.loadSnapshot.mockResolvedValue(snapshot)
+    let resolveCreate!: (value: FinanceSnapshot['accounts'][number]) => void
+    repository.createAccount.mockReturnValue(new Promise((resolve) => { resolveCreate = resolve }))
+    const store = useFinanceStore()
+    await store.load('user-1')
+    const pending = store.createAccount({ name: 'Late', kind: 'asset', openingBalanceMinor: 0, color: '#a' })
+
+    store.reset()
+    resolveCreate({ ...snapshot.accounts[0], id: 'late-account' })
+    await pending
+
+    expect(store.accounts).toEqual([])
+    expect(store.error).toBe('')
+    expect(store.userId).toBeNull()
+  })
+
+  it('does not expose a stale mutation error after reset invalidates its owner', async () => {
+    repository.loadSnapshot.mockResolvedValue(snapshot)
+    let rejectCreate!: (cause: Error) => void
+    repository.createAccount.mockReturnValue(new Promise((_, reject) => { rejectCreate = reject }))
+    const store = useFinanceStore()
+    await store.load('user-1')
+    const pending = store.createAccount({ name: 'Late', kind: 'asset', openingBalanceMinor: 0, color: '#a' })
+
+    store.reset()
+    rejectCreate(new Error('late server failure'))
+    await expect(pending).rejects.toThrow('late server failure')
+
+    expect(store.accounts).toEqual([])
+    expect(store.error).toBe('')
+    expect(store.userId).toBeNull()
+  })
+
   it('reconciles server-returned account and category rows by ID', async () => {
     repository.loadSnapshot.mockResolvedValue(snapshot)
     const store = useFinanceStore()
