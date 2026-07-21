@@ -9,6 +9,7 @@ const MIN_PASSWORD_LENGTH = 8
 const AUTH_IN_PROGRESS = 'Authentication request already in progress'
 const INVALID_RECOVERY = 'Open a valid password recovery link before choosing a new password.'
 const SIGN_OUT_FAILED = 'Unable to sign out. Please try again.'
+const LOCAL_SIGN_OUT_UNCONFIRMED = 'Signed out on this device, but the server could not confirm session revocation.'
 
 export const useAuthStore = defineStore('auth', () => {
   const finance = useFinanceStore()
@@ -16,7 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
   const initialized = ref(false)
   const pending = ref(false)
   const error = ref('')
-  const recoveryMode = ref(false)
+  const recoverySessionToken = ref<string | null>(null)
   let unsubscribe: (() => void) | null = null
   let initialization: Promise<void> | null = null
   let initializationGeneration = -1
@@ -25,6 +26,9 @@ export const useAuthStore = defineStore('auth', () => {
   let mutationGeneration = 0
 
   const user = computed<User | null>(() => session.value?.user ?? null)
+  const recoveryMode = computed(() =>
+    Boolean(recoverySessionToken.value && session.value?.access_token === recoverySessionToken.value),
+  )
 
   function ensureSubscription(): void {
     if (unsubscribe) return
@@ -36,8 +40,11 @@ export const useAuthStore = defineStore('auth', () => {
       authEventRevision += 1
       session.value = nextSession
       if (!nextSession) finance.reset()
-      if (event === 'PASSWORD_RECOVERY' && nextSession) recoveryMode.value = true
-      if (event === 'SIGNED_OUT') recoveryMode.value = false
+      if (event === 'PASSWORD_RECOVERY' && nextSession) {
+        recoverySessionToken.value = nextSession.access_token
+      } else if (event === 'SIGNED_OUT' || nextSession?.access_token !== recoverySessionToken.value) {
+        recoverySessionToken.value = null
+      }
     })
     unsubscribe = () => {
       ownsSubscription = false
@@ -64,8 +71,9 @@ export const useAuthStore = defineStore('auth', () => {
       if (ownerGeneration !== generation) return
 
       if (sessionError) error.value = sessionError.message
-      if (authEventRevision === startingEventRevision && !recoveryMode.value) {
+      if (authEventRevision === startingEventRevision) {
         session.value = data.session
+        if (data.session?.access_token !== recoverySessionToken.value) recoverySessionToken.value = null
         if (!data.session) finance.reset()
       }
       initialized.value = true
@@ -82,7 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function run<T>(action: () => Promise<T>, safeError?: string): Promise<T> {
+  async function run<T>(action: () => Promise<T>, safeError?: string | (() => string)): Promise<T> {
     if (pending.value) throw new Error(AUTH_IN_PROGRESS)
 
     const ownerGeneration = ++mutationGeneration
@@ -92,7 +100,7 @@ export const useAuthStore = defineStore('auth', () => {
       return await action()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Authentication failed'
-      error.value = safeError ?? message
+      error.value = typeof safeError === 'function' ? safeError() : safeError ?? message
       throw cause
     } finally {
       if (ownerGeneration === mutationGeneration) pending.value = false
@@ -107,6 +115,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (!data.session) {
         throw new Error('Immediate signup is disabled in Supabase. Turn off Confirm email for production v1.')
       }
+      recoverySessionToken.value = null
       session.value = data.session
       return data
     })
@@ -116,6 +125,7 @@ export const useAuthStore = defineStore('auth', () => {
     return run(async () => {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
       if (signInError) throw signInError
+      recoverySessionToken.value = null
       session.value = data.session
       return data
     })
@@ -123,12 +133,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function signOut() {
     return run(async () => {
-      const { error: signOutError } = await supabase.auth.signOut()
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' })
       if (signOutError) throw signOutError
       session.value = null
-      recoveryMode.value = false
+      recoverySessionToken.value = null
       finance.reset()
-    }, SIGN_OUT_FAILED)
+    }, () => session.value ? SIGN_OUT_FAILED : LOCAL_SIGN_OUT_UNCONFIRMED)
   }
 
   async function requestPasswordReset(email: string) {
@@ -146,7 +156,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (!initialized.value || !session.value || !recoveryMode.value) throw new Error(INVALID_RECOVERY)
       const { error: updateError } = await supabase.auth.updateUser({ password })
       if (updateError) throw updateError
-      recoveryMode.value = false
+      recoverySessionToken.value = null
     })
   }
 
@@ -154,6 +164,7 @@ export const useAuthStore = defineStore('auth', () => {
     generation += 1
     unsubscribe?.()
     unsubscribe = null
+    recoverySessionToken.value = null
     initialized.value = false
   }
 

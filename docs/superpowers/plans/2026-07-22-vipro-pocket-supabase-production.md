@@ -151,8 +151,8 @@ Completed:
 - Protected application wrapper
 - Supabase session store
 - Hash routes for auth pages
-- Added a visible, accessible Settings sign-out action with pending protection and safe rejected-signout feedback
-- Preserved the authenticated session and finance state when sign-out is rejected; successful sign-out clears finance state and returns to login through the protected lifecycle
+- Added a visible, accessible Settings local sign-out action with pending protection and safe rejected-signout feedback
+- Preserved the authenticated app only when sign-out is rejected before local session removal; when auth-js emits `SIGNED_OUT` before returning an API error, the protected lifecycle clears finance state, returns to login, and retains safe feedback
 - Added auth mutation single-flight protection across signup, sign-in, sign-out, reset request, and password update
 - Initialized auth eagerly and made recovery event handling reliable before, during, immediately after, and after store initialization
 - Gated password updates on an authenticated recovery session, with URL-processing loading state and expired-link guidance
@@ -160,8 +160,8 @@ Completed:
 
 Verified locally:
 
-- Focused auth store and UI wiring tests pass (17 tests)
-- Full frontend suite passes (95 tests)
+- Focused auth store and UI wiring tests pass (22 tests)
+- Full frontend suite passes (100 tests)
 - TypeScript checking and production build pass
 - No live password-reset email was sent locally; configured redirects, SMTP, immediate signup behavior, and the end-to-end recovery journey remain production checks in Tasks 11–12
 

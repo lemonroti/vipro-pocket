@@ -45,7 +45,8 @@ vi.mock('../lib/finance-repository', () => ({ createFinanceRepository: () => ({}
 import { useAuthStore } from './auth'
 import { useFinanceStore } from './finance'
 
-const session = { user: { id: 'user-1' } }
+const session = { access_token: 'session-token-1', user: { id: 'user-1' } }
+const differentSession = { access_token: 'session-token-2', user: { id: 'user-1' } }
 
 function seedFinanceState() {
   const finance = useFinanceStore()
@@ -89,12 +90,13 @@ describe('auth finance lifecycle', () => {
 
     await auth.signOut()
 
+    expect(authBoundary.signOut).toHaveBeenCalledWith({ scope: 'local' })
     expect(finance.userId).toBeNull()
     expect(finance.profile).toBeNull()
     expect(finance.initialized).toBe(false)
   })
 
-  it('keeps the authenticated app usable and exposes safe feedback when sign-out is rejected', async () => {
+  it('keeps the authenticated app usable when sign-out is rejected before local session removal', async () => {
     const finance = seedFinanceState()
     const auth = useAuthStore()
     await auth.initialize()
@@ -106,6 +108,26 @@ describe('auth finance lifecycle', () => {
     expect(finance.userId).toBe('user-1')
     expect(finance.initialized).toBe(true)
     expect(auth.error).toBe('Unable to sign out. Please try again.')
+    expect(auth.error).not.toContain('private provider detail')
+  })
+
+  it('clears finance and retains safe feedback when auth-js emits signed-out before returning an error', async () => {
+    const finance = seedFinanceState()
+    const auth = useAuthStore()
+    await auth.initialize()
+    authBoundary.signOut.mockImplementationOnce(async () => {
+      authBoundary.emit('SIGNED_OUT', null)
+      return { error: new Error('private provider detail') }
+    })
+
+    await expect(auth.signOut()).rejects.toThrow('private provider detail')
+
+    expect(auth.user).toBeNull()
+    expect(finance.userId).toBeNull()
+    expect(finance.profile).toBeNull()
+    expect(finance.initialized).toBe(false)
+    expect(auth.error).toBe('Signed out on this device, but the server could not confirm session revocation.')
+    expect(auth.error).not.toContain('private provider detail')
   })
 
   it('blocks a second auth mutation until the active request settles', async () => {
@@ -181,6 +203,55 @@ describe('auth finance lifecycle', () => {
     expect(auth.recoveryMode).toBe(false)
   })
 
+  it('clears recovery authorization after a successful normal sign-in', async () => {
+    const auth = useAuthStore()
+    await auth.initialize()
+    authBoundary.emit('PASSWORD_RECOVERY', session)
+    authBoundary.signInWithPassword.mockResolvedValueOnce({ data: { session }, error: null })
+
+    await auth.signIn('vincent@example.com', 'password123')
+
+    expect(auth.recoveryMode).toBe(false)
+    await expect(auth.updatePassword('new-password')).rejects.toThrow('Open a valid password recovery link')
+  })
+
+  it('clears recovery authorization after a successful normal signup', async () => {
+    const auth = useAuthStore()
+    await auth.initialize()
+    authBoundary.emit('PASSWORD_RECOVERY', session)
+    authBoundary.signUp.mockResolvedValueOnce({ data: { session }, error: null })
+
+    await auth.signUp('vincent@example.com', 'password123')
+
+    expect(auth.recoveryMode).toBe(false)
+  })
+
+  it('clears recovery authorization when disposal is followed by a different session', async () => {
+    const auth = useAuthStore()
+    await auth.initialize()
+    authBoundary.emit('PASSWORD_RECOVERY', session)
+
+    auth.dispose()
+    authBoundary.getSession.mockResolvedValueOnce({ data: { session: differentSession }, error: null })
+    await auth.initialize()
+
+    expect(auth.user?.id).toBe('user-1')
+    expect(auth.recoveryMode).toBe(false)
+  })
+
+  it('clears recovery authorization when disposal is followed by no session', async () => {
+    const auth = useAuthStore()
+    await auth.initialize()
+    authBoundary.emit('PASSWORD_RECOVERY', session)
+
+    auth.dispose()
+    authBoundary.getSession.mockResolvedValueOnce({ data: { session: null }, error: null })
+    await auth.initialize()
+
+    expect(auth.user).toBeNull()
+    expect(auth.recoveryMode).toBe(false)
+  })
+
   it('can initialize a fresh auth listener after disposal', async () => {
     const auth = useAuthStore()
     await auth.initialize()
@@ -219,9 +290,9 @@ describe('auth finance lifecycle', () => {
     const newInitialization = auth.initialize()
     expect(authBoundary.getSession).toHaveBeenCalledTimes(2)
 
-    resolveNew({ data: { session: { user: { id: 'new-user' } } }, error: null })
+    resolveNew({ data: { session: { access_token: 'new-token', user: { id: 'new-user' } } }, error: null })
     await newInitialization
-    resolveOld({ data: { session: { user: { id: 'old-user' } } }, error: null })
+    resolveOld({ data: { session: { access_token: 'old-token', user: { id: 'old-user' } } }, error: null })
     await oldInitialization
 
     expect(auth.initialized).toBe(true)
@@ -233,7 +304,7 @@ describe('auth finance lifecycle', () => {
     const auth = useAuthStore()
     await auth.initialize()
     auth.dispose()
-    authBoundary.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'new-user' } } }, error: null })
+    authBoundary.getSession.mockResolvedValueOnce({ data: { session: { access_token: 'new-token', user: { id: 'new-user' } } }, error: null })
     await auth.initialize()
 
     authBoundary.emitAt(0, 'SIGNED_OUT', null)
