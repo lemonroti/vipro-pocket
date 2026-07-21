@@ -51,7 +51,7 @@ Budget months use the canonical SQL date form `YYYY-MM-01`. Transactions use `YY
 
 ### Supabase Auth
 
-The current authentication flow supports email/password signup, login, password recovery, and password updates. The protected lifecycle initializes the session, loads the authenticated user's finance snapshot, resets state on sign-out, and redirects unauthenticated users.
+The private-beta authentication flow supports immediate email/password signup, login, and sign-out. Email recovery is intentionally not exposed because this single-user beta does not send authentication email. The protected lifecycle initializes the session, loads the authenticated user's finance snapshot, resets state on sign-out, and redirects unauthenticated users.
 
 ### Row Level Security
 

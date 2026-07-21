@@ -14,8 +14,6 @@ const router = createRouter({
     { path: '/', component: () => import('./App.vue') },
     { path: '/login', component: () => import('./components/auth/AuthView.vue') },
     { path: '/signup', component: () => import('./components/auth/AuthView.vue') },
-    { path: '/forgot-password', component: () => import('./components/auth/AuthView.vue') },
-    { path: '/update-password', component: () => import('./components/auth/UpdatePasswordView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

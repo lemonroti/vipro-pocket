@@ -45,7 +45,7 @@ Convert the approved Vipro Pocket prototype into a public production web app bac
 - Email and password authentication
 - Immediate access after signup
 - Email confirmation disabled for v1
-- Password reset supported
+- Authentication email and password reset deferred by the owner for the private single-user beta
 - Supabase is the only production data source
 - No offline mode or Dexie synchronization in v1
 - New users receive default categories only
@@ -140,30 +140,28 @@ Verified:
 
 ### Task 5 — Authentication
 
-Status: Complete locally (2026-07-22; production redirect/SMTP journey remains in Tasks 11–12)
+Status: Complete for the private-beta scope (2026-07-22)
 
 Completed:
 
 - Login UI
 - Signup UI
-- Forgot-password UI
-- Update-password UI
 - Protected application wrapper
 - Supabase session store
 - Hash routes for auth pages
 - Added a visible, accessible Settings local sign-out action with pending protection and safe rejected-signout feedback
 - Preserved the authenticated app only when sign-out is rejected before local session removal; when auth-js emits `SIGNED_OUT` before returning an API error, the protected lifecycle clears finance state, returns to login, and retains safe feedback
-- Added auth mutation single-flight protection across signup, sign-in, sign-out, reset request, and password update
-- Initialized auth eagerly and made recovery event handling reliable before, during, immediately after, and after store initialization
-- Gated password updates on an authenticated recovery session, with URL-processing loading state and expired-link guidance
+- Added auth mutation single-flight protection across signup, sign-in, and sign-out; retained tested recovery internals for a future email-enabled release
+- Initialized auth eagerly and kept future recovery event handling reliable before, during, immediately after, and after store initialization
+- Removed forgot-password and update-password routes and visible links from the private-beta surface because the owner explicitly excluded authentication email
 - Kept password length/confirmation validation and disabled submission/navigation controls during pending auth work
 
 Verified locally:
 
 - Focused auth and protected-lifecycle tests pass (30 tests)
-- Full frontend suite passes (103 tests)
+- Full frontend suite passes (106 tests)
 - TypeScript checking and production build pass
-- No live password-reset email was sent locally; configured redirects, SMTP, immediate signup behavior, and the end-to-end recovery journey remain production checks in Tasks 11–12
+- Recovery internals remain covered by tests but email delivery is explicitly outside this private-beta release scope
 
 ### Task 6 — Authenticated Pocket state store
 
@@ -239,7 +237,7 @@ Verified:
 
 ### Task 11 — GitHub Pages production configuration
 
-Status: In progress
+Status: Complete for the private-beta scope
 
 Completed:
 
@@ -255,27 +253,26 @@ Completed:
 - Disabled email confirmation for this private single-user beta so signup immediately returns a session
 - Confirmed the hardened frontend and GitHub-hosted Docker/pgTAP jobs pass
 
-Required:
+Deferred:
 
-- Configure production SMTP for password recovery
+- Custom SMTP, email confirmation, and public password recovery for a future email-enabled release
 
 ### Task 12 — Production verification and release
 
-Status: In progress (code and local production-build journeys verified; live Pages release and SMTP recovery remain)
+Status: In progress (code and local production-build journeys verified; merged Pages deployment remains)
 
 Completed:
 
-- Full frontend suite passes (105 tests) and the production build/type-check passes
+- Full frontend suite passes (106 tests) and the production build/type-check passes
 - Security Advisor reports no findings; Performance Advisor reports only expected unused-index informational notices on the new low-traffic database
 - Two independently signed-up live Supabase users see isolated finance data
-- Production build browser journeys pass for signup, login, logout, refresh persistence, accounts, categories, expense/income/transfer transactions, budgets, CSV export, currency, charts, and invalid recovery-link guidance
+- Production build browser journeys pass for signup, login, logout, refresh persistence, accounts, categories, expense/income/transfer transactions, budgets, CSV export, currency, and charts
 - Desktop Chromium and an Android-sized 390 x 844 responsive viewport render without console errors during the verified journeys
 - Fixed a production-only blank root caused by a runtime template and split route bundles below Vite's warning threshold
-- Fixed stale authentication feedback leaking between login, signup, and recovery forms
+- Fixed stale authentication feedback leaking between authentication forms
 
 Required:
 
-- Configure and verify production SMTP plus the delivered password-recovery link
 - Verify the merged GitHub Pages deployment on desktop Chrome and an Android device/Chrome emulation
 - Review PR #5
 - Merge only after all checks pass
@@ -287,7 +284,6 @@ Required:
 - The same user sees the same data across PC and Android
 - Different users cannot access each other’s records
 - Accounts, transactions, categories, and budgets persist in Supabase
-- Password reset works through the GitHub Pages hash route
 - Existing approved UI remains visually consistent
 - No secret or service-role key appears in frontend code
 - GitHub Actions passes before merge

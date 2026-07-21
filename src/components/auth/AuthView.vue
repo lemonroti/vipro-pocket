@@ -13,11 +13,10 @@ const message = ref('')
 
 const mode = computed(() => {
   if (route.path === '/signup') return 'signup'
-  if (route.path === '/forgot-password') return 'forgot'
   return 'login'
 })
 
-const title = computed(() => ({ login: 'Welcome back', signup: 'Create your account', forgot: 'Reset your password' })[mode.value])
+const title = computed(() => ({ login: 'Welcome back', signup: 'Create your account' })[mode.value])
 
 watch(mode, () => {
   auth.clearError()
@@ -38,12 +37,6 @@ async function submit() {
       return
     }
 
-    if (mode.value === 'forgot') {
-      await auth.requestPasswordReset(email.value.trim())
-      message.value = 'Check your email for the password reset link.'
-      return
-    }
-
     await auth.signIn(email.value.trim(), password.value)
     await router.replace('/')
   } catch {
@@ -58,12 +51,11 @@ async function submit() {
       <div class="auth-brand"><b>VP</b><span>vipro-pocket</span></div>
       <h1>{{ title }}</h1>
       <p v-if="mode === 'login'">Sign in to access your finances across devices.</p>
-      <p v-else-if="mode === 'signup'">Start with default categories and add your own accounts.</p>
-      <p v-else>Enter your email and we will send a recovery link.</p>
+      <p v-else>Start with default categories and add your own accounts.</p>
 
       <form @submit.prevent="submit">
         <label>Email<input v-model="email" type="email" autocomplete="email" :disabled="auth.pending" required /></label>
-        <label v-if="mode !== 'forgot'">Password<input v-model="password" type="password" :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'" minlength="8" :disabled="auth.pending" required /></label>
+        <label>Password<input v-model="password" type="password" :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'" minlength="8" :disabled="auth.pending" required /></label>
         <label v-if="mode === 'signup'">Confirm password<input v-model="confirmPassword" type="password" autocomplete="new-password" minlength="8" :disabled="auth.pending" required /></label>
         <p v-if="auth.error" class="auth-error">{{ auth.error }}</p>
         <p v-if="message" class="auth-success">{{ message }}</p>
@@ -75,7 +67,6 @@ async function submit() {
       <nav class="auth-links">
         <RouterLink v-if="mode !== 'login'" to="/login" :aria-disabled="auth.pending" :tabindex="auth.pending ? -1 : undefined" @click="preventPendingNavigation">Sign in</RouterLink>
         <RouterLink v-if="mode !== 'signup'" to="/signup" :aria-disabled="auth.pending" :tabindex="auth.pending ? -1 : undefined" @click="preventPendingNavigation">Create account</RouterLink>
-        <RouterLink v-if="mode !== 'forgot'" to="/forgot-password" :aria-disabled="auth.pending" :tabindex="auth.pending ? -1 : undefined" @click="preventPendingNavigation">Forgot password?</RouterLink>
       </nav>
     </section>
   </main>

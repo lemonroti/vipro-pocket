@@ -25,11 +25,17 @@ describe('Task 5 production auth wiring', () => {
   it('lazy-loads route views so the production entry bundle stays small', () => {
     expect(main).toContain("component: () => import('./App.vue')")
     expect(main).toContain("component: () => import('./components/auth/AuthView.vue')")
-    expect(main).toContain("component: () => import('./components/auth/UpdatePasswordView.vue')")
     expect(main).not.toContain("import App from './App.vue'")
     expect(main).toContain('await router.isReady()')
     expect(main).toContain('createApp(RouterView)')
     expect(main).not.toContain("template: '<RouterView />'")
+  })
+
+  it('does not expose email recovery in the private beta', () => {
+    expect(main).not.toContain("path: '/forgot-password'")
+    expect(main).not.toContain("path: '/update-password'")
+    expect(authView).not.toContain('Forgot password?')
+    expect(authView).not.toContain('requestPasswordReset')
   })
 
   it('shows recovery loading and expired-link guidance before rendering the password form', () => {
