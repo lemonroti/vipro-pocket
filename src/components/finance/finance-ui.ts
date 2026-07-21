@@ -1,0 +1,118 @@
+import type { Account, Budget, Category, Transaction, TransactionType, UpsertBudgetInput } from '../../types/finance-domain'
+
+type TransactionDraft = {
+  type: TransactionType
+  amount: string
+  accountId: string
+  toAccountId: string
+  categoryId: string
+  transactionDate: string
+}
+
+type ValueControl = { value: string }
+type Destroyable = { destroy: () => void } | null
+
+export function canonicalBudgetMonth(displayMonth: string): string {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(displayMonth)) throw new Error('Month must use YYYY-MM format.')
+  return `${displayMonth}-01`
+}
+
+export function budgetForMonth(budgets: Budget[], categoryId: string, displayMonth: string): Budget | undefined {
+  const month = canonicalBudgetMonth(displayMonth)
+  return budgets.find((budget) => budget.categoryId === categoryId && budget.month === month)
+}
+
+export function createBudgetInput(categoryId: string, displayMonth: string, limitMinor: number): UpsertBudgetInput {
+  return { categoryId, month: canonicalBudgetMonth(displayMonth), limitMinor }
+}
+
+export function parseMinorUnits(value: string, { allowZero = false }: { allowZero?: boolean } = {}): number | null {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null
+  const amount = Number(value)
+  const minor = Math.round(amount * 100)
+  if (!Number.isFinite(amount) || !Number.isSafeInteger(minor) || minor < 0 || (!allowZero && minor === 0)) return null
+  return minor
+}
+
+function isValidDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
+
+export function isValidTransactionDraft(
+  draft: TransactionDraft,
+  accounts: Pick<Account, 'id'>[],
+  categories: Pick<Category, 'id' | 'type'>[],
+): boolean {
+  if (parseMinorUnits(draft.amount) === null || !isValidDate(draft.transactionDate)) return false
+  if (!accounts.some(({ id }) => id === draft.accountId)) return false
+  if (draft.type === 'transfer') {
+    return draft.toAccountId !== draft.accountId && accounts.some(({ id }) => id === draft.toAccountId)
+  }
+  return categories.some(({ id, type }) => id === draft.categoryId && type === draft.type)
+}
+
+export function createPendingLock() {
+  let pending = false
+  return {
+    tryAcquire(): boolean {
+      if (pending) return false
+      pending = true
+      return true
+    },
+    release(): void {
+      pending = false
+    },
+  }
+}
+
+export async function runControlMutation(
+  control: ValueControl,
+  rollbackValue: string,
+  mutation: () => Promise<unknown>,
+): Promise<boolean> {
+  try {
+    await mutation()
+    return true
+  } catch {
+    control.value = rollbackValue
+    return false
+  }
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value)
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+  return `"${safe.replaceAll('"', '""')}"`
+}
+
+export function buildTransactionsCsv(
+  transactions: Transaction[],
+  accounts: Pick<Account, 'id' | 'name'>[],
+  categories: Pick<Category, 'id' | 'name'>[],
+): string {
+  const accountNames = new Map(accounts.map(({ id, name }) => [id, name]))
+  const categoryNames = new Map(categories.map(({ id, name }) => [id, name]))
+  const rows = [
+    ['Date', 'Type', 'Category', 'Merchant', 'Amount', 'Account', 'Destination account'],
+    ...transactions.map((transaction) => [
+      transaction.transactionDate,
+      transaction.type,
+      transaction.type === 'transfer' ? 'Transfer' : categoryNames.get(transaction.categoryId) ?? 'Unknown',
+      transaction.merchant,
+      (transaction.amountMinor / 100).toFixed(2),
+      accountNames.get(transaction.accountId) ?? '',
+      transaction.toAccountId ? accountNames.get(transaction.toAccountId) ?? '' : '',
+    ]),
+  ]
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n')
+}
+
+export function destroyCharts(...charts: Destroyable[]): void {
+  charts.forEach((chart) => chart?.destroy())
+}

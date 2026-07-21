@@ -30,6 +30,17 @@ import {
 } from '../../finance'
 import { useFinanceStore } from '../../stores/finance'
 import type { Category, Transaction, TransactionType } from '../../types/finance-domain'
+import {
+  budgetForMonth,
+  buildTransactionsCsv,
+  canonicalBudgetMonth,
+  createBudgetInput,
+  createPendingLock,
+  destroyCharts,
+  isValidTransactionDraft,
+  parseMinorUnits,
+  runControlMutation,
+} from './finance-ui'
 
 const finance = useFinanceStore()
 const { accounts, budgets, categories, profile, transactions } = storeToRefs(finance)
@@ -57,10 +68,17 @@ const typeFilter = ref('all')
 const dark = ref(localStorage.getItem('vipro-pocket-theme') === 'dark')
 const toast = ref('')
 const selectedMonth = ref(monthKey())
+const transactionPending = ref(false)
+const currencyPending = ref(false)
+const pendingBudgetIds = ref(new Set<string>())
 const chartCanvas = ref<HTMLCanvasElement | null>(null)
 const categoryCanvas = ref<HTMLCanvasElement | null>(null)
 let cashChart: Chart | null = null
 let categoryChart: Chart | null = null
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+const transactionLock = createPendingLock()
+const currencyLock = createPendingLock()
+const budgetLocks = new Map<string, ReturnType<typeof createPendingLock>>()
 
 const form = ref({
   type: 'expense' as TransactionType,
@@ -73,20 +91,15 @@ const form = ref({
   transactionDate: new Date().toISOString().slice(0, 10),
 })
 const currency = computed(() => profile.value?.currency ?? 'MYR')
-const canSubmit = computed(() => {
-  if (!accounts.value.length || !form.value.accountId || Math.round(Number(form.value.amount) * 100) <= 0) return false
-  if (form.value.type === 'transfer') {
-    return Boolean(form.value.toAccountId && form.value.toAccountId !== form.value.accountId)
-  }
-  return Boolean(form.value.categoryId)
-})
+const budgetMonth = computed(() => canonicalBudgetMonth(selectedMonth.value))
+const canSubmit = computed(() => isValidTransactionDraft(form.value, accounts.value, categories.value))
 
 const summary = computed(() => monthlySummary(transactions.value, selectedMonth.value))
 const balances = computed(() => accountBalances(accounts.value, transactions.value))
 const totalNetWorth = computed(() => netWorth(accounts.value, transactions.value))
 const categorySpend = computed(() => categoryTotals(transactions.value, selectedMonth.value))
 const totalBudget = computed(() =>
-  budgets.value.filter((budget) => budget.month === selectedMonth.value).reduce((sum, budget) => sum + budget.limitMinor, 0),
+  budgets.value.filter((budget) => budget.month === budgetMonth.value).reduce((sum, budget) => sum + budget.limitMinor, 0),
 )
 const remainingBudget = computed(() => totalBudget.value - summary.value.expenseMinor)
 const budgetUsage = computed(() =>
@@ -111,8 +124,7 @@ const filteredTransactions = computed(() =>
 )
 const budgetRows = computed(() =>
   expenseCategories.value.map((category) => {
-    const limit =
-      budgets.value.find((budget) => budget.month === selectedMonth.value && budget.categoryId === category.id)?.limitMinor ?? 0
+    const limit = budgetForMonth(budgets.value, category.id, selectedMonth.value)?.limitMinor ?? 0
     const spent = categorySpend.value[category.id] ?? 0
     return {
       category,
@@ -164,8 +176,12 @@ function transactionCategoryColor(transaction: Transaction): string {
 }
 
 function showToast(message: string) {
+  if (toastTimer) clearTimeout(toastTimer)
   toast.value = message
-  setTimeout(() => (toast.value = ''), 2200)
+  toastTimer = setTimeout(() => {
+    toast.value = ''
+    toastTimer = null
+  }, 2200)
 }
 
 function openAdd(type: TransactionType) {
@@ -183,8 +199,13 @@ function openAdd(type: TransactionType) {
 }
 
 async function addTransaction() {
-  const amountMinor = Math.round(Number(form.value.amount) * 100)
-  if (!canSubmit.value) return
+  if (!canSubmit.value || !transactionLock.tryAcquire()) return
+  const amountMinor = parseMinorUnits(form.value.amount)
+  if (amountMinor === null) {
+    transactionLock.release()
+    return
+  }
+  transactionPending.value = true
   try {
     if (form.value.type === 'transfer') {
       await finance.createTransaction({
@@ -215,6 +236,9 @@ async function addTransaction() {
     showToast('Transaction saved')
   } catch {
     showToast(finance.error || 'Unable to create the transaction. Please try again.')
+  } finally {
+    transactionPending.value = false
+    transactionLock.release()
   }
 }
 
@@ -228,44 +252,58 @@ async function removeTransaction(id: string) {
   }
 }
 
-async function updateBudget(categoryId: string, value: string) {
-  try {
-    await finance.upsertBudget({
-      categoryId,
-      month: selectedMonth.value,
-      limitMinor: Math.max(0, Math.round(Number(value) * 100)),
-    })
+async function updateBudget(categoryId: string, control: HTMLInputElement, currentLimitMinor: number) {
+  const rollbackValue = (currentLimitMinor / 100).toFixed(2)
+  const limitMinor = parseMinorUnits(control.value, { allowZero: true })
+  if (limitMinor === null) {
+    control.value = rollbackValue
+    showToast('Enter a valid budget with no more than two decimal places.')
+    return
+  }
+  const lock = budgetLocks.get(categoryId) ?? createPendingLock()
+  budgetLocks.set(categoryId, lock)
+  if (!lock.tryAcquire()) {
+    control.value = rollbackValue
+    return
+  }
+  pendingBudgetIds.value = new Set(pendingBudgetIds.value).add(categoryId)
+  const saved = await runControlMutation(
+    control,
+    rollbackValue,
+    () => finance.upsertBudget(createBudgetInput(categoryId, selectedMonth.value, limitMinor)),
+  )
+  if (saved) {
+    control.value = (limitMinor / 100).toFixed(2)
     showToast('Budget saved')
-  } catch {
+  } else {
     showToast(finance.error || 'Unable to save the budget. Please try again.')
   }
+  const pending = new Set(pendingBudgetIds.value)
+  pending.delete(categoryId)
+  pendingBudgetIds.value = pending
+  lock.release()
 }
 
-async function updateCurrency(value: string) {
-  if (value === currency.value) return
-  try {
-    await finance.updateProfileCurrency(value)
+async function updateCurrency(control: HTMLSelectElement) {
+  const previousCurrency = currency.value
+  if (control.value === previousCurrency || !currencyLock.tryAcquire()) {
+    control.value = previousCurrency
+    return
+  }
+  currencyPending.value = true
+  const updated = await runControlMutation(control, previousCurrency, () => finance.updateProfileCurrency(control.value))
+  if (updated) {
     showToast('Currency updated')
-  } catch {
+  } else {
     showToast(finance.error || 'Unable to update the currency. Please try again.')
   }
+  currencyPending.value = false
+  currencyLock.release()
 }
 
 function exportCsv() {
-  const rows = [
-    ['Date', 'Type', 'Category', 'Merchant', 'Amount', 'Account', 'Destination account'],
-    ...sortedTransactions.value.map((item) => [
-      item.transactionDate,
-      item.type,
-      transactionCategoryName(item),
-      item.merchant,
-      (item.amountMinor / 100).toFixed(2),
-      accounts.value.find((account) => account.id === item.accountId)?.name ?? '',
-      item.toAccountId ? accounts.value.find((account) => account.id === item.toAccountId)?.name ?? '' : '',
-    ]),
-  ]
   const blob = new Blob(
-    [rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\n')],
+    [buildTransactionsCsv(sortedTransactions.value, accounts.value, categories.value)],
     { type: 'text/csv' },
   )
   const url = URL.createObjectURL(blob)
@@ -278,7 +316,6 @@ function exportCsv() {
 
 function switchPage(page: Page) {
   activePage.value = page
-  nextTick(renderCharts)
 }
 
 function lastSixMonths() {
@@ -290,8 +327,7 @@ function lastSixMonths() {
 }
 
 function renderCharts() {
-  cashChart?.destroy()
-  categoryChart?.destroy()
+  destroyCharts(cashChart, categoryChart)
   cashChart = null
   categoryChart = null
 
@@ -365,8 +401,8 @@ watch(
   },
 )
 onBeforeUnmount(() => {
-  cashChart?.destroy()
-  categoryChart?.destroy()
+  destroyCharts(cashChart, categoryChart)
+  if (toastTimer) clearTimeout(toastTimer)
 })
 </script>
 
@@ -401,8 +437,8 @@ onBeforeUnmount(() => {
           <small>left this month</small>
         </div>
         <button class="sidebar-profile" @click="switchPage('settings')">
-          <span class="avatar">LR</span>
-          <span><strong>Lemon Roti</strong><small>Personal workspace</small></span>
+          <span class="avatar">VP</span>
+          <span><strong>Your workspace</strong><small>{{ currency }} finance</small></span>
           <ChevronRight :size="16" />
         </button>
       </div>
@@ -528,20 +564,20 @@ onBeforeUnmount(() => {
 
         <section v-else-if="activePage === 'budgets'" class="stack">
           <div class="metrics"><article class="metric"><span>Total budget</span><strong>{{ money(totalBudget, currency) }}</strong></article><article class="metric"><span>Spent</span><strong>{{ money(summary.expenseMinor, currency) }}</strong></article><article class="metric"><span>Remaining</span><strong>{{ money(remainingBudget, currency) }}</strong></article></div>
-          <p v-if="!budgets.some((budget) => budget.month === selectedMonth)" class="empty-state">No budgets yet.</p>
-          <div class="budget-grid"><article v-for="row in budgetRows" :key="row.category.id" class="card budget-item"><div class="section-head"><div><span>{{ row.category.name }}</span><h3>{{ money(row.spent, currency) }}</h3></div><b :class="{ danger: row.percent > 100 }">{{ row.percent }}%</b></div><div class="progress"><i :style="{ width: `${Math.min(row.percent, 100)}%`, background: row.category.color }"></i></div><div class="split"><span>{{ row.remaining >= 0 ? `${money(row.remaining, currency)} left` : `${money(Math.abs(row.remaining), currency)} over` }}</span><label>Limit <input :value="(row.limit / 100).toFixed(0)" type="number" @change="updateBudget(row.category.id, ($event.target as HTMLInputElement).value)" /></label></div></article></div>
+          <p v-if="!budgets.some((budget) => budget.month === budgetMonth)" class="empty-state">No budgets yet.</p>
+          <div class="budget-grid"><article v-for="row in budgetRows" :key="row.category.id" class="card budget-item"><div class="section-head"><div><span>{{ row.category.name }}</span><h3>{{ money(row.spent, currency) }}</h3></div><b :class="{ danger: row.percent > 100 }">{{ row.percent }}%</b></div><div class="progress"><i :style="{ width: `${Math.min(row.percent, 100)}%`, background: row.category.color }"></i></div><div class="split"><span>{{ row.remaining >= 0 ? `${money(row.remaining, currency)} left` : `${money(Math.abs(row.remaining), currency)} over` }}</span><label>Limit <input :value="(row.limit / 100).toFixed(2)" type="number" min="0" step="0.01" :disabled="pendingBudgetIds.has(row.category.id)" @change="updateBudget(row.category.id, $event.target as HTMLInputElement, row.limit)" /></label></div></article></div>
         </section>
 
         <section v-else-if="activePage === 'accounts'" class="stack"><article class="hero compact"><span>Total net worth</span><h2>{{ money(totalNetWorth, currency) }}</h2><p>Assets minus liabilities</p></article><p v-if="!accounts.length" class="empty-state">No accounts yet. Account management is coming next.</p><div class="account-grid"><article v-for="account in accounts" :key="account.id" class="card account-card"><i :style="{ background: account.color }"></i><div><span>{{ account.kind }}</span><h3>{{ account.name }}</h3></div><strong>{{ money(balances[account.id] ?? 0, currency) }}</strong></article></div></section>
 
         <section v-else-if="activePage === 'reports'" class="stack"><div class="metrics"><article class="metric"><span>Savings rate</span><strong>{{ savingsRate }}%</strong></article><article class="metric"><span>Average daily spending</span><strong>{{ money(Math.round(summary.expenseMinor / Math.max(1, new Date().getDate())), currency) }}</strong></article><article class="metric"><span>Largest category</span><strong>{{ largestCategoryName }}</strong></article></div><div class="content-grid"><article class="card chart-card"><h3>Income and expenses</h3><div class="chart-wrap"><canvas ref="chartCanvas"></canvas></div></article><article class="card"><h3>Current month categories</h3><div class="chart-wrap small"><canvas ref="categoryCanvas"></canvas></div></article></div></section>
 
-        <section v-else class="settings-grid"><article class="card settings-card"><div><span>Appearance</span><h3>Dark mode</h3><p>Use a dark interface on this device.</p></div><button class="toggle" :class="{ on: dark }" @click="dark = !dark"><i></i></button></article><article class="card settings-card"><div><span>Currency</span><h3>Display currency</h3><p>Stored amounts remain unchanged.</p></div><select :value="currency" @change="updateCurrency(($event.target as HTMLSelectElement).value)"><option>MYR</option><option>SGD</option><option>USD</option></select></article><article class="card settings-card"><div><span>Data</span><h3>Export CSV</h3></div><button class="secondary" @click="exportCsv">Export</button></article></section>
+        <section v-else class="settings-grid"><article class="card settings-card"><div><span>Appearance</span><h3>Dark mode</h3><p>Use a dark interface on this device.</p></div><button class="toggle" :class="{ on: dark }" @click="dark = !dark"><i></i></button></article><article class="card settings-card"><div><span>Currency</span><h3>Display currency</h3><p>Stored amounts remain unchanged.</p></div><select :value="currency" :disabled="currencyPending" @change="updateCurrency($event.target as HTMLSelectElement)"><option>MYR</option><option>SGD</option><option>USD</option></select></article><article class="card settings-card"><div><span>Data</span><h3>Export CSV</h3></div><button class="secondary" @click="exportCsv">Export</button></article></section>
       </div>
     </main>
 
     <button class="mobile-fab" :disabled="!accounts.length" :title="!accounts.length ? 'Add an account before creating a transaction' : ''" @click="openAdd('expense')">＋</button>
-    <div v-if="modalOpen" class="modal-backdrop" @click.self="modalOpen = false"><form class="modal" @submit.prevent="addTransaction"><div class="modal-head"><div><span>Quick add</span><h2>New transaction</h2></div><button type="button" class="icon-button" @click="modalOpen = false">×</button></div><div class="segmented"><button v-for="type in ['expense', 'income', 'transfer']" :key="type" type="button" :class="{ active: form.type === type }" @click="form.type = type as TransactionType">{{ type }}</button></div><label class="amount-label"><span>Amount</span><div><b>{{ currency }}</b><input v-model="form.amount" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="0.00" autofocus /></div></label><div class="form-grid"><label><span>From account</span><select v-model="form.accountId"><option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option></select></label><label v-if="form.type === 'transfer'"><span>To account</span><select v-model="form.toAccountId"><option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="account.id === form.accountId">{{ account.name }}</option></select></label><label v-else><span>Category</span><select v-model="form.categoryId"><option v-for="category in eligibleCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label><label><span>Date</span><input v-model="form.transactionDate" type="date" /></label></div><label><span>Merchant or source</span><input v-model="form.merchant" placeholder="Where was this?" /></label><label><span>Note</span><textarea v-model="form.note" rows="2"></textarea></label><button class="primary full" type="submit" :disabled="!canSubmit">Save transaction</button></form></div>
+    <div v-if="modalOpen" class="modal-backdrop" @click.self="modalOpen = false"><form class="modal" @submit.prevent="addTransaction"><div class="modal-head"><div><span>Quick add</span><h2>New transaction</h2></div><button type="button" class="icon-button" :disabled="transactionPending" @click="modalOpen = false">×</button></div><div class="segmented"><button v-for="type in ['expense', 'income', 'transfer']" :key="type" type="button" :class="{ active: form.type === type }" :disabled="transactionPending" @click="form.type = type as TransactionType">{{ type }}</button></div><label class="amount-label"><span>Amount</span><div><b>{{ currency }}</b><input v-model="form.amount" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="0.00" required autofocus /></div></label><div class="form-grid"><label><span>From account</span><select v-model="form.accountId" required><option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option></select></label><label v-if="form.type === 'transfer'"><span>To account</span><select v-model="form.toAccountId" required><option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="account.id === form.accountId">{{ account.name }}</option></select></label><label v-else><span>Category</span><select v-model="form.categoryId" required><option v-for="category in eligibleCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label><label><span>Date</span><input v-model="form.transactionDate" type="date" required /></label></div><label><span>Merchant or source</span><input v-model="form.merchant" placeholder="Where was this?" /></label><label><span>Note</span><textarea v-model="form.note" rows="2"></textarea></label><button class="primary full" type="submit" :disabled="transactionPending || !canSubmit">{{ transactionPending ? 'Saving…' : 'Save transaction' }}</button></form></div>
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>

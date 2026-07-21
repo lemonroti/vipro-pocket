@@ -42,4 +42,13 @@ describe('Task 7 finance UI migration', () => {
     expect(dashboard).toContain('No budgets yet')
     expect(dashboard).toContain('Add an account before creating a transaction')
   })
+
+  it('uses safe controls and contains no prototype identity', () => {
+    expect(dashboard).toContain('step="0.01"')
+    expect(dashboard).toContain(':disabled="transactionPending || !canSubmit"')
+    expect(dashboard).toMatch(/runControlMutation\(\s*control,\s*rollbackValue,/)
+    expect(dashboard).toMatch(/runControlMutation\(\s*control,\s*previousCurrency,/)
+    expect(dashboard).not.toContain('activePage.value = page\n  nextTick(renderCharts)')
+    expect(dashboard).not.toMatch(/Lemon Roti|class="avatar">LR/)
+  })
 })
