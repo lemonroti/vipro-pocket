@@ -1,8 +1,34 @@
 # Vipro Pocket Supabase Production Implementation Plan
 
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` to implement this plan task-by-task.
+
 ## Goal
 
 Convert the approved Vipro Pocket prototype into a public production web app backed by a brand-new Supabase project, while preserving the approved dashboard and navigation design.
+
+## Global Constraints
+
+- Continue directly on `feat/supabase-production`; do not create a Git worktree.
+- Treat this as a one-user beta for scope and test-volume decisions, but retain production-grade data integrity, RLS, secret handling, migrations, error handling, and CI.
+- Supabase is the only production data source; do not add Dexie synchronization or offline data persistence.
+- Preserve the approved dashboard, navigation, responsive behavior, dark mode, CSV export, and currency display.
+- Store every monetary amount as an integer in minor currency units.
+- Use the browser-safe Supabase publishable key only; never expose a secret or service-role key.
+- Check current official documentation or Context7 before relying on uncertain library, API, authentication, PostgreSQL, or GitHub Actions behavior.
+- Use lean critical TDD: write and observe one to three focused failing tests for each material behavior before implementation, then run the relevant test file.
+- Keep the existing UI regression tests, but do not multiply brittle markup-string tests unless an approved visual contract needs protection.
+- Use GitHub Actions as the primary test and build environment because sustained local Node/Docker workloads can hang the development PC.
+- Run lightweight targeted checks locally when practical; push meaningful checkpoints and use CI logs to diagnose failures.
+- Finish with one complete verification pass covering the full automated suite, type-check, production build, database reset/tests, RLS isolation, advisors, and critical browser journeys.
+
+## Execution and CI Strategy
+
+1. Commit the npm lockfile, Supabase migrations, and database tests before application repository work.
+2. Configure CI to use Node.js 22 and `npm ci` for deterministic frontend verification.
+3. Add a separate Supabase database job using the official CLI and GitHub-hosted Docker runtime.
+4. Run CI for pull requests to `main` and pushes to `feat/supabase-production`; deploy only from `main`.
+5. Implement each application task with its smallest critical test first, then push a reviewed checkpoint.
+6. Treat GitHub Actions as the authoritative repeatable verification result; local checks are supporting evidence.
 
 ## Active Development
 
