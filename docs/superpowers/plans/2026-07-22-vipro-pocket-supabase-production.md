@@ -160,8 +160,8 @@ Completed:
 
 Verified locally:
 
-- Focused auth store and UI wiring tests pass (22 tests)
-- Full frontend suite passes (100 tests)
+- Focused auth and protected-lifecycle tests pass (30 tests)
+- Full frontend suite passes (103 tests)
 - TypeScript checking and production build pass
 - No live password-reset email was sent locally; configured redirects, SMTP, immediate signup behavior, and the end-to-end recovery journey remain production checks in Tasks 11–12
 
@@ -245,16 +245,17 @@ Completed:
 
 - Updated GitHub Actions to use Node.js 22 and `npm ci`
 - Added a pinned Supabase CLI database-test job on GitHub-hosted Docker
-- Enabled CI for pull requests to `main` and pushes to `feat/supabase-production`
+- Runs feature-branch CI once through pull requests to `main`, avoiding duplicate push runs
 - Restricted GitHub Pages deployment to pushes on `main`
 - Scoped Pages and OIDC write permissions to the deploy job only
+- Uses maintained official action majors and bounded job timeouts
+- Reads and validates the production Supabase URL and publishable key from GitHub repository variables
+- Configured the Supabase Auth Site URL for GitHub Pages
 
 Required:
 
-- Configure `VITE_SUPABASE_URL`
-- Configure `VITE_SUPABASE_PUBLISHABLE_KEY`
-- Use only the publishable key in the browser
-- Configure Supabase Site URL and redirect URLs
+- Confirm the updated workflow passes in GitHub Actions
+- Configure the Supabase password-recovery redirect URL
 - Configure production SMTP for password recovery
 
 ### Task 12 — Production verification and release
