@@ -263,7 +263,7 @@ Status: In progress (PR #5 is deployed; mobile-navigation follow-up is locally v
 
 Completed:
 
-- Full frontend suite passes (108 tests) and the production build/type-check passes
+- Full frontend suite passes (111 tests) and the production build/type-check passes
 - Security Advisor reports no findings; Performance Advisor reports only expected unused-index informational notices on the new low-traffic database
 - Two independently signed-up live Supabase users see isolated finance data
 - Production build browser journeys pass for signup, login, logout, refresh persistence, accounts, categories, expense/income/transfer transactions, budgets, CSV export, currency, and charts
@@ -273,6 +273,8 @@ Completed:
 - PR #5 was reviewed, merged, and deployed after the required frontend and Docker/pgTAP checks passed
 - Added a safe-area-aware six-destination bottom navigation after live `390 x 844` verification exposed that the hidden mobile sidebar had no replacement
 - Verified the mobile navigation at `320 x 844` and `390 x 844`, every destination, Settings sign-out, refresh persistence, desktop sidebar preservation, and zero browser console errors or warnings against a production build
+- Resolved independent review findings for WCAG AA inactive-label contrast, compact visible labels with full accessible names, toast/FAB separation, scoped responsive/layering tests, scroll and heading-focus management, and dark-mode form-control legibility
+- Re-verified dark mode and a long validation toast at `320 x 844`; controls remain legible, the toast wraps above the FAB, and the browser console remains clean
 - Removed the exact disposable verification user and confirmed its profile/category rows cascaded to zero; the hosted Security Advisor remains clean
 
 Required:

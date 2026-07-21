@@ -75,12 +75,12 @@ const eligibleCategories = computed(() =>
 const pages = ['dashboard', 'transactions', 'budgets', 'accounts', 'reports', 'settings'] as const
 type Page = (typeof pages)[number]
 const navigation = [
-  { id: 'dashboard' as Page, label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'transactions' as Page, label: 'Transactions', icon: ReceiptText },
-  { id: 'budgets' as Page, label: 'Budgets', icon: PiggyBank },
-  { id: 'accounts' as Page, label: 'Accounts', icon: WalletCards },
-  { id: 'reports' as Page, label: 'Reports', icon: BarChart3 },
-  { id: 'settings' as Page, label: 'Settings', icon: Settings },
+  { id: 'dashboard' as Page, label: 'Dashboard', mobileLabel: 'Home', icon: LayoutDashboard },
+  { id: 'transactions' as Page, label: 'Transactions', mobileLabel: 'Activity', icon: ReceiptText },
+  { id: 'budgets' as Page, label: 'Budgets', mobileLabel: 'Budgets', icon: PiggyBank },
+  { id: 'accounts' as Page, label: 'Accounts', mobileLabel: 'Accounts', icon: WalletCards },
+  { id: 'reports' as Page, label: 'Reports', mobileLabel: 'Reports', icon: BarChart3 },
+  { id: 'settings' as Page, label: 'Settings', mobileLabel: 'Settings', icon: Settings },
 ]
 
 const activePage = ref<Page>('dashboard')
@@ -104,6 +104,7 @@ const transactionPending = ref(false)
 const currencyPending = ref(false)
 const budgetCopyPending = ref(false)
 const pendingBudgetIds = ref(new Set<string>())
+const pageHeading = ref<HTMLHeadingElement | null>(null)
 const chartCanvas = ref<HTMLCanvasElement | null>(null)
 const categoryCanvas = ref<HTMLCanvasElement | null>(null)
 let cashChart: Chart | null = null
@@ -511,6 +512,8 @@ function exportCsv() {
 
 function switchPage(page: Page) {
   activePage.value = page
+  window.scrollTo({ top: 0, behavior: 'auto' })
+  void nextTick(() => pageHeading.value?.focus({ preventScroll: true }))
 }
 
 function lastSixMonths() {
@@ -638,7 +641,7 @@ onBeforeUnmount(() => {
         <header class="topbar">
           <div>
             <small>{{ new Date().toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' }) }}</small>
-            <h1>{{ pageTitle }}</h1>
+            <h1 ref="pageHeading" tabindex="-1">{{ pageTitle }}</h1>
           </div>
           <div class="top-actions">
             <button class="icon-button" @click="dark = !dark"><component :is="dark ? Sun : Moon" :size="18" /></button>
@@ -799,11 +802,12 @@ onBeforeUnmount(() => {
         class="mobile-nav-link"
         :class="{ active: activePage === item.id }"
         type="button"
+        :aria-label="item.label"
         :aria-current="activePage === item.id ? 'page' : undefined"
         @click="switchPage(item.id)"
       >
         <component :is="item.icon" :size="20" />
-        <span>{{ item.label }}</span>
+        <span>{{ item.mobileLabel }}</span>
       </button>
     </nav>
 

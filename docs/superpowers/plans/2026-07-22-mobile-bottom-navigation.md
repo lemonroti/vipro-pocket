@@ -59,6 +59,8 @@ Run with production Supabase browser variables: `npm run build`
 
 Expected: TypeScript and Vite production build pass without chunk warnings.
 
+Post-review verification: 111 frontend tests pass. The production build was checked at `320 x 844`, `390 x 844`, and desktop width, including compact labels, light/dark contrast, long-toast wrapping above the FAB, dark form controls, destination scroll/focus reset, session persistence, and a clean browser console.
+
 - [ ] **Step 5: Record and publish the repair**
 
 Mark the mobile portion of Task 12 complete only after browser verification. Commit the focused repair, push `feat/supabase-production`, open a reviewed pull request to `main`, and merge only after required `frontend-checks` and `database-tests` pass.
