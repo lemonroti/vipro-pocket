@@ -100,6 +100,12 @@ function mapBudget(row: BudgetRow): Budget {
   }
 }
 
+function compareBudgetsByCategoryAndId(left: Budget, right: Budget): number {
+  if (left.categoryId !== right.categoryId) return left.categoryId < right.categoryId ? -1 : 1
+  if (left.id === right.id) return 0
+  return left.id < right.id ? -1 : 1
+}
+
 function toAccountUpdate(input: UpdateAccountInput): TablesUpdate<'accounts'> {
   return {
     ...(input.name === undefined ? {} : { name: input.name }),
@@ -264,7 +270,7 @@ export function createFinanceRepository(
       }))
       const { data, error } = await client.from('budgets').upsert(payload, { onConflict: 'user_id,category_id,month' }).select('*')
       throwIfError(error)
-      return (data ?? []).map(mapBudget)
+      return (data ?? []).map(mapBudget).sort(compareBudgetsByCategoryAndId)
     },
   }
 }
