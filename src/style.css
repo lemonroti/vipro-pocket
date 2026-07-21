@@ -7,7 +7,9 @@
 .mobile-nav-link svg{width:20px;height:20px}.mobile-nav-link span{max-width:100%;overflow:hidden;text-overflow:ellipsis}.mobile-nav-link.active{background:#e4f0e9;color:#153b30}.mobile-nav-link:focus-visible{outline:3px solid #8d7cf7;outline-offset:-3px}
 .dark .mobile-nav{background:rgba(25,34,29,.97);border-color:#344139}.dark .mobile-nav-link{color:#aeb9b1}.dark .mobile-nav-link.active{background:#2c3d34;color:#c6f36d}
 .dark input,.dark select,.dark textarea{background:#19221d;color:#eef4ef;border-color:#344139}
-.mobile-fab{z-index:45;bottom:calc(5.25rem + env(safe-area-inset-bottom))}.toast{bottom:calc(9.5rem + env(safe-area-inset-bottom));width:max-content;max-width:calc(100vw - 2rem);overflow-wrap:anywhere;text-align:center}
+.mobile-fab{z-index:45;bottom:calc(5.25rem + env(safe-area-inset-bottom))}.toast{width:max-content;max-width:calc(100vw - 2rem);overflow-wrap:anywhere;text-align:center}
+
+@media(max-width:759px){.toast{bottom:calc(9.5rem + env(safe-area-inset-bottom))}}
 
 @media(min-width:760px){.mobile-nav{display:none}}
 

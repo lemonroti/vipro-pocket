@@ -75,12 +75,12 @@ const eligibleCategories = computed(() =>
 const pages = ['dashboard', 'transactions', 'budgets', 'accounts', 'reports', 'settings'] as const
 type Page = (typeof pages)[number]
 const navigation = [
-  { id: 'dashboard' as Page, label: 'Dashboard', mobileLabel: 'Home', icon: LayoutDashboard },
-  { id: 'transactions' as Page, label: 'Transactions', mobileLabel: 'Activity', icon: ReceiptText },
-  { id: 'budgets' as Page, label: 'Budgets', mobileLabel: 'Budgets', icon: PiggyBank },
-  { id: 'accounts' as Page, label: 'Accounts', mobileLabel: 'Accounts', icon: WalletCards },
-  { id: 'reports' as Page, label: 'Reports', mobileLabel: 'Reports', icon: BarChart3 },
-  { id: 'settings' as Page, label: 'Settings', mobileLabel: 'Settings', icon: Settings },
+  { id: 'dashboard' as Page, label: 'Dashboard', mobileLabel: 'Home', mobileAriaLabel: 'Home, Dashboard', icon: LayoutDashboard },
+  { id: 'transactions' as Page, label: 'Transactions', mobileLabel: 'Activity', mobileAriaLabel: 'Activity, Transactions', icon: ReceiptText },
+  { id: 'budgets' as Page, label: 'Budgets', mobileLabel: 'Budgets', mobileAriaLabel: 'Budgets', icon: PiggyBank },
+  { id: 'accounts' as Page, label: 'Accounts', mobileLabel: 'Accounts', mobileAriaLabel: 'Accounts', icon: WalletCards },
+  { id: 'reports' as Page, label: 'Reports', mobileLabel: 'Reports', mobileAriaLabel: 'Reports', icon: BarChart3 },
+  { id: 'settings' as Page, label: 'Settings', mobileLabel: 'Settings', mobileAriaLabel: 'Settings', icon: Settings },
 ]
 
 const activePage = ref<Page>('dashboard')
@@ -802,7 +802,7 @@ onBeforeUnmount(() => {
         class="mobile-nav-link"
         :class="{ active: activePage === item.id }"
         type="button"
-        :aria-label="item.label"
+        :aria-label="item.mobileAriaLabel"
         :aria-current="activePage === item.id ? 'page' : undefined"
         @click="switchPage(item.id)"
       >
