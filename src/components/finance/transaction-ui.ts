@@ -8,7 +8,7 @@ import type {
   TransactionType,
   UpdateTransactionInput,
 } from '../../types/finance-domain'
-import { parseMinorUnits } from './finance-ui'
+import { isValidCalendarDate, parseMinorUnits } from './finance-ui'
 
 export type CategoryDraft = { name: string; type: CategoryType | string; color: string }
 export type TransactionDraft = {
@@ -25,16 +25,6 @@ export type TransactionDraft = {
 type PendingLock = { tryAcquire: () => boolean; release: () => void }
 type OperationResult = { status: 'success' | 'invalid' | 'pending' | 'cancelled' | 'rejected'; message?: string }
 const DUPLICATE_CATEGORY_ERROR = 'A category with this name and type already exists.'
-
-function isValidDate(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!match) return false
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const date = new Date(Date.UTC(year, month - 1, day))
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-}
 
 export function categoryPayloadFromDraft(
   draft: CategoryDraft,
@@ -101,7 +91,7 @@ export function transactionPayloadFromDraft(
 ): { payload: CreateTransactionInput | null; error: string } {
   const amountMinor = parseMinorUnits(draft.amount)
   if (amountMinor === null) return { payload: null, error: 'Enter a positive amount with no more than two decimal places.' }
-  if (!isValidDate(draft.transactionDate)) return { payload: null, error: 'Choose a valid transaction date.' }
+  if (!isValidCalendarDate(draft.transactionDate)) return { payload: null, error: 'Choose a valid transaction date.' }
   if (!accounts.some(({ id }) => id === draft.accountId)) return { payload: null, error: 'Choose a valid source account.' }
   const merchant = draft.merchant.trim()
   const note = draft.note.trim()

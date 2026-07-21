@@ -34,7 +34,7 @@ export function parseMinorUnits(value: string, { allowZero = false }: { allowZer
   return minor
 }
 
-function isValidDate(value: string): boolean {
+export function isValidCalendarDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (!match) return false
   const year = Number(match[1])
@@ -49,7 +49,7 @@ export function isValidTransactionDraft(
   accounts: Pick<Account, 'id'>[],
   categories: Pick<Category, 'id' | 'type'>[],
 ): boolean {
-  if (parseMinorUnits(draft.amount) === null || !isValidDate(draft.transactionDate)) return false
+  if (parseMinorUnits(draft.amount) === null || !isValidCalendarDate(draft.transactionDate)) return false
   if (!accounts.some(({ id }) => id === draft.accountId)) return false
   if (draft.type === 'transfer') {
     return draft.toAccountId !== draft.accountId && accounts.some(({ id }) => id === draft.toAccountId)

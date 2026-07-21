@@ -733,7 +733,7 @@ onBeforeUnmount(() => {
           <article class="card category-settings">
             <div class="section-head"><div><span>Custom categories</span><h3>Income and expense labels</h3></div><button class="secondary" type="button" @click="openCategoryModal"><Plus :size="16" /> Add category</button></div>
             <p v-if="!customCategories.length" class="empty-state">No custom categories yet. Your default categories remain available.</p>
-            <div v-else class="category-chip-list"><span v-for="category in customCategories" :key="category.id" class="category-chip"><i :style="{ background: category.color }"></i>{{ category.name }}<small>{{ category.type }}</small></span></div>
+            <div v-else class="category-chip-list"><span v-for="category in customCategories" :key="category.id" class="category-chip"><i :style="{ background: category.color }"></i><span>{{ category.name }}</span><small>{{ category.type }}</small></span></div>
           </article>
         </section>
       </div>

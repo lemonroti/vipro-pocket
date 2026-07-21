@@ -93,6 +93,31 @@ describe('transaction management boundary', () => {
     })
   })
 
+  it('prevents duplicate in-flight transaction creates and deletes', async () => {
+    let finishCreate
+    const createTransaction = vi.fn().mockReturnValue(new Promise((resolve) => { finishCreate = resolve }))
+    const createLock = createPendingLock()
+    const createOptions = {
+      draft: draft(), transactionId: null, accounts, categories, createTransaction,
+      updateTransaction: vi.fn(), lock: createLock,
+    }
+    const firstCreate = ui.saveTransaction(createOptions)
+    await expect(ui.saveTransaction(createOptions)).resolves.toEqual({ status: 'pending' })
+    expect(createTransaction).toHaveBeenCalledOnce()
+    finishCreate({})
+    await expect(firstCreate).resolves.toEqual({ status: 'success' })
+
+    let finishDelete
+    const deleteTransaction = vi.fn().mockReturnValue(new Promise((resolve) => { finishDelete = resolve }))
+    const deleteLock = createPendingLock()
+    const deleteOptions = { transaction: expense, deleteTransaction, confirmDelete: () => true, lock: deleteLock }
+    const firstDelete = ui.deleteTransactionWithConfirmation(deleteOptions)
+    await expect(ui.deleteTransactionWithConfirmation(deleteOptions)).resolves.toEqual({ status: 'pending' })
+    expect(deleteTransaction).toHaveBeenCalledOnce()
+    finishDelete({})
+    await expect(firstDelete).resolves.toEqual({ status: 'success' })
+  })
+
   it('identifies delete confirmation and preserves a rejected row', async () => {
     const confirmDelete = vi.fn().mockReturnValue(true)
     const deleteTransaction = vi.fn().mockRejectedValue(new Error('database details'))
