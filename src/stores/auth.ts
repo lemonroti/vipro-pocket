@@ -3,10 +3,12 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { getAuthRedirectUrl } from '../lib/auth-redirect'
 import { supabase } from '../lib/supabase'
+import { useFinanceStore } from './finance'
 
 const MIN_PASSWORD_LENGTH = 8
 
 export const useAuthStore = defineStore('auth', () => {
+  const finance = useFinanceStore()
   const session = ref<Session | null>(null)
   const initialized = ref(false)
   const pending = ref(false)
@@ -22,9 +24,11 @@ export const useAuthStore = defineStore('auth', () => {
     const { data, error: sessionError } = await supabase.auth.getSession()
     if (sessionError) error.value = sessionError.message
     session.value = data.session
+    if (!data.session) finance.reset()
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       session.value = nextSession
+      if (!nextSession) finance.reset()
       recoveryMode.value = event === 'PASSWORD_RECOVERY'
     })
 
@@ -79,6 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
       const { error: signOutError } = await supabase.auth.signOut()
       if (signOutError) throw signOutError
       session.value = null
+      finance.reset()
     })
   }
 
@@ -103,6 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
   function dispose() {
     unsubscribe?.()
     unsubscribe = null
+    initialized.value = false
   }
 
   return {
