@@ -120,7 +120,7 @@ Verified:
 
 ### Task 4 — Production data repository
 
-Status: Not started
+Status: Complete
 
 Required:
 
@@ -132,6 +132,11 @@ Required:
 - Add budget upsert
 - Add previous-month budget copy
 - Map foreign-key deletion failures to user-friendly messages
+
+Verified:
+
+- Focused repository tests cover complete row mapping, server error behavior, account deletion FK messaging, and previous-month budget copying
+- TypeScript checking and the production build pass
 
 ### Task 5 — Authentication
 

@@ -1,44 +1,352 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
-      profiles: {
-        Row: { user_id: string; currency: string; created_at: string; updated_at: string }
-        Insert: { user_id: string; currency?: string; created_at?: string; updated_at?: string }
-        Update: { user_id?: string; currency?: string; created_at?: string; updated_at?: string }
-        Relationships: []
-      }
-      categories: {
-        Row: { id: string; user_id: string; name: string; type: 'income' | 'expense'; color: string; is_default: boolean; created_at: string; updated_at: string }
-        Insert: { id?: string; user_id: string; name: string; type: 'income' | 'expense'; color?: string; is_default?: boolean; created_at?: string; updated_at?: string }
-        Update: { id?: string; user_id?: string; name?: string; type?: 'income' | 'expense'; color?: string; is_default?: boolean; created_at?: string; updated_at?: string }
-        Relationships: []
-      }
       accounts: {
-        Row: { id: string; user_id: string; name: string; kind: 'asset' | 'liability'; opening_balance_minor: number; color: string; created_at: string; updated_at: string }
-        Insert: { id?: string; user_id: string; name: string; kind: 'asset' | 'liability'; opening_balance_minor?: number; color?: string; created_at?: string; updated_at?: string }
-        Update: { id?: string; user_id?: string; name?: string; kind?: 'asset' | 'liability'; opening_balance_minor?: number; color?: string; created_at?: string; updated_at?: string }
-        Relationships: []
-      }
-      transactions: {
-        Row: { id: string; user_id: string; type: 'income' | 'expense' | 'transfer'; amount_minor: number; account_id: string; to_account_id: string | null; category_id: string | null; merchant: string; note: string; transaction_date: string; created_at: string; updated_at: string }
-        Insert: { id?: string; user_id: string; type: 'income' | 'expense' | 'transfer'; amount_minor: number; account_id: string; to_account_id?: string | null; category_id?: string | null; merchant?: string; note?: string; transaction_date: string; created_at?: string; updated_at?: string }
-        Update: { id?: string; user_id?: string; type?: 'income' | 'expense' | 'transfer'; amount_minor?: number; account_id?: string; to_account_id?: string | null; category_id?: string | null; merchant?: string; note?: string; transaction_date?: string; created_at?: string; updated_at?: string }
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["account_kind"]
+          name: string
+          opening_balance_minor: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["account_kind"]
+          name: string
+          opening_balance_minor?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["account_kind"]
+          name?: string
+          opening_balance_minor?: number
+          updated_at?: string
+          user_id?: string
+        }
         Relationships: []
       }
       budgets: {
-        Row: { id: string; user_id: string; category_id: string; month: string; limit_minor: number; created_at: string; updated_at: string }
-        Insert: { id?: string; user_id: string; category_id: string; month: string; limit_minor: number; created_at?: string; updated_at?: string }
-        Update: { id?: string; user_id?: string; category_id?: string; month?: string; limit_minor?: number; created_at?: string; updated_at?: string }
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          limit_minor: number
+          month: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          limit_minor: number
+          month: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          limit_minor?: number
+          month?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_category_owner_fk"
+            columns: ["category_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          type: Database["public"]["Enums"]["category_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          type: Database["public"]["Enums"]["category_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          type?: Database["public"]["Enums"]["category_type"]
+          updated_at?: string
+          user_id?: string
+        }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          currency: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          account_id: string
+          amount_minor: number
+          category_id: string | null
+          created_at: string
+          id: string
+          merchant: string
+          note: string
+          to_account_id: string | null
+          transaction_date: string
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          amount_minor: number
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          merchant?: string
+          note?: string
+          to_account_id?: string | null
+          transaction_date: string
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          amount_minor?: number
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          merchant?: string
+          note?: string
+          to_account_id?: string | null
+          transaction_date?: string
+          type?: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_owner_fk"
+            columns: ["account_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "transactions_category_owner_fk"
+            columns: ["category_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "transactions_to_account_owner_fk"
+            columns: ["to_account_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
     Enums: {
-      account_kind: 'asset' | 'liability'
-      category_type: 'income' | 'expense'
-      transaction_type: 'income' | 'expense' | 'transfer'
+      account_kind: "asset" | "liability"
+      category_type: "income" | "expense"
+      transaction_type: "income" | "expense" | "transfer"
     }
-    CompositeTypes: Record<string, never>
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      account_kind: ["asset", "liability"],
+      category_type: ["income", "expense"],
+      transaction_type: ["income", "expense", "transfer"],
+    },
+  },
+} as const
