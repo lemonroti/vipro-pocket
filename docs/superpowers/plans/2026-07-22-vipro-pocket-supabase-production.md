@@ -72,15 +72,15 @@ Completed:
 - Added `.env.example`
 - Added `src/env.d.ts`
 - Created `feat/supabase-production`
+- Added deterministic `package-lock.json`
 
 Remaining:
 
-- Update and verify `package-lock.json`
-- Run full install, test, and production build
+- Verify locked install, tests, and production build in CI
 
 ### Task 2 — Fresh Supabase project and schema
 
-Status: Database deployed; repository files remaining
+Status: Database deployed; repository files added, CI verification pending
 
 Completed:
 
@@ -93,11 +93,12 @@ Completed:
 - Revoked public execution of the security-definer trigger function
 - Supabase Security Advisor is clean
 - Added missing foreign-key indexes
+- Saved the deployed migration history under `supabase/migrations/`
+- Added transaction-isolated pgTAP database tests
 
 Remaining:
 
-- Save migration SQL under `supabase/migrations/`
-- Save database tests under `supabase/tests/database/`
+- Verify a clean local database start, migrations, and pgTAP tests in CI
 
 ### Task 3 — Typed Supabase browser client
 
@@ -210,14 +211,20 @@ Required:
 
 ### Task 11 — GitHub Pages production configuration
 
-Status: Not started
+Status: In progress
+
+Completed:
+
+- Updated GitHub Actions to use Node.js 22 and `npm ci`
+- Added a pinned Supabase CLI database-test job on GitHub-hosted Docker
+- Enabled CI for pull requests to `main` and pushes to `feat/supabase-production`
+- Restricted GitHub Pages deployment to pushes on `main`
 
 Required:
 
 - Configure `VITE_SUPABASE_URL`
 - Configure `VITE_SUPABASE_PUBLISHABLE_KEY`
 - Use only the publishable key in the browser
-- Update GitHub Actions to run install, tests, type-check, build, and deploy
 - Configure Supabase Site URL and redirect URLs
 - Configure production SMTP for password recovery
 
