@@ -202,7 +202,7 @@ Required:
 
 ### Task 9 — Category and transaction management
 
-Status: Complete (2026-07-22; 74 tests passing and production build verified locally; awaiting independent review and GitHub Actions)
+Status: Complete (2026-07-22; covered by the 111-test suite, independent review, GitHub Actions, and live browser journeys)
 
 Required:
 
@@ -259,7 +259,7 @@ Deferred:
 
 ### Task 12 — Production verification and release
 
-Status: In progress (PR #5 is deployed; mobile-navigation follow-up is locally verified and awaiting reviewed deployment)
+Status: Complete (2026-07-22; PR #6 merged and the production deployment was verified live)
 
 Completed:
 
@@ -276,11 +276,10 @@ Completed:
 - Resolved independent review findings for WCAG AA inactive-label contrast, compact visible labels with full accessible names, toast/FAB separation, scoped responsive/layering tests, scroll and heading-focus management, and dark-mode form-control legibility
 - Re-verified dark mode and a long validation toast at `320 x 844`; controls remain legible, the toast wraps above the FAB, and the browser console remains clean
 - Removed the exact disposable verification user and confirmed its profile/category rows cascaded to zero; the hosted Security Advisor remains clean
-
-Required:
-
-- Review and merge the mobile-navigation follow-up only after required checks pass
-- Verify the follow-up GitHub Pages deployment on desktop Chrome and Android-sized Chrome emulation
+- PR #6 passed independent review with no remaining findings, then passed the required frontend and Docker/Postgres/pgTAP checks before merge
+- Main run `29873414516` passed frontend checks, database tests, and GitHub Pages deployment for commit `b4a2408`
+- Live GitHub Pages verification passed at `320 x 844`, `390 x 844`, and `1440 x 900`, including signup, all six mobile destinations, accessible names, heading focus, dark-mode persistence and controls, responsive desktop restoration, sign-out, and zero console errors or warnings
+- Confirmed the final disposable signup created one profile and 11 default categories with no sample financial data; removed that exact auth user and verified every cascaded table count returned to zero
 
 ## Acceptance Criteria
 

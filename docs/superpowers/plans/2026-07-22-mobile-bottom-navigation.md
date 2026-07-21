@@ -61,10 +61,12 @@ Expected: TypeScript and Vite production build pass without chunk warnings.
 
 Post-review verification: 111 frontend tests pass. The production build was checked at `320 x 844`, `390 x 844`, and desktop width, including compact labels, light/dark contrast, long-toast wrapping above the FAB, dark form controls, destination scroll/focus reset, session persistence, and a clean browser console.
 
-- [ ] **Step 5: Record and publish the repair**
+- [x] **Step 5: Record and publish the repair**
 
 Mark the mobile portion of Task 12 complete only after browser verification. Commit the focused repair, push `feat/supabase-production`, open a reviewed pull request to `main`, and merge only after required `frontend-checks` and `database-tests` pass.
 
-- [ ] **Step 6: Verify the deployed production site**
+- [x] **Step 6: Verify the deployed production site**
 
 At `390 x 844`, create a disposable account, navigate through all six destinations, verify Settings contains Sign out, reload to prove session persistence, inspect the console, and delete the exact temporary Supabase user. Re-run the Supabase Security Advisor and confirm zero findings.
+
+Completed on 2026-07-22 after PR #6 merged. Main run `29873414516` deployed commit `b4a2408`. Live checks passed at `320 x 844`, `390 x 844`, and `1440 x 900`; the final disposable account was deleted with all cascaded row counts at zero, and the Security Advisor returned no findings.
